@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TERMINAL 9 - Instructions</title>
+    <!-- Favicon -->
+    <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
+    
+    <!-- Google Fonts: Montserrat & Montaser/Montserrat Arabic -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;0,900;1,400&family=Montserrat+Arabic:wght@700;900&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Montserrat', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: flex-start;
+            padding-top: 10px;
+            overflow-x: hidden;
+        }
+
+        /* TEMPORIZADOR ROJO SUPERIOR (Montaser Arabic) */
+        .timer-header-wrapper {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+
+        .timer-container {
+            position: relative;
+            background: #000000;
+            border-bottom: 2px solid #ff0000;
+            border-left: 2px solid #ff0000;
+            border-right: 2px solid #ff0000;
+            border-bottom-left-radius: 40px;
+            border-bottom-right-radius: 40px;
+            padding: 15px 45px 12px 45px;
+            display: flex;
+            gap: 30px;
+            box-shadow: 0 0 25px rgba(255, 0, 0, 0.4);
+        }
+
+        .timer-block {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .timer-digit {
+            font-family: 'Montserrat Arabic', 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: 3.2rem;
+            color: #e60000;
+            line-height: 1;
+            text-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
+        }
+
+        .timer-label {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.75rem;
+            color: #e60000;
+            margin-top: 4px;
+        }
+
+        /* TARJETA DE INSTRUCCIONES (Imagen 1) */
+        .card-container {
+            width: 90%;
+            max-width: 900px;
+            background: rgba(10, 10, 12, 0.95);
+            border: 2px solid rgba(255, 255, 255, 0.25);
+            border-radius: 12px;
+            padding: 50px 30px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+
+        .logo-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 45px;
+        }
+
+        .logo-img {
+            width: 32px;
+            height: 32px;
+            object-fit: cover;
+            border-radius: 4px;
+        }
+
+        .brand-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: 1.8rem;
+            letter-spacing: 2px;
+        }
+
+        .day-title {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 900;
+            font-size: 1.6rem;
+            letter-spacing: 2px;
+            margin-bottom: 45px;
+            text-transform: uppercase;
+        }
+
+        .instructions-body {
+            font-family: 'Montserrat', sans-serif;
+            font-weight: 400;
+            font-size: 1.25rem;
+            line-height: 1.6;
+            color: #e0e0e0;
+            max-width: 750px;
+            margin-bottom: 20px;
+        }
+
+        .footer-note {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 0.95rem;
+            color: #888888;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- TEMPORIZADOR ROJO 20:00:00 -->
+    <div class="timer-header-wrapper">
+        <div class="timer-container">
+            <div class="timer-block">
+                <span class="timer-digit" id="hours">20</span>
+                <span class="timer-label">Hours</span>
+            </div>
+            <div class="timer-block">
+                <span class="timer-digit" id="minutes">00</span>
+                <span class="timer-label">Minutes</span>
+            </div>
+            <div class="timer-block">
+                <span class="timer-digit" id="seconds">00</span>
+                <span class="timer-label">Seconds</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- TARJETA INSTRUCCIONES -->
+    <div class="card-container">
+        <div class="logo-header">
+            <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
+            <span class="brand-title">TERMINAL 9</span>
+        </div>
+
+        <h1 class="day-title">DAY 1</h1>
+
+        <div class="instructions-body">
+            Here goes the instructions in montserrat font
+        </div>
+    </div>
+
+    <p class="footer-note">*If you are a player, dont let the timer runs out</p>
+
+    <script>
+        let durationSeconds = 20 * 60 * 60;
+        function updateTimerDisplay() {
+            let hours = Math.floor(durationSeconds / 3600);
+            let minutes = Math.floor((durationSeconds % 3600) / 60);
+            let seconds = durationSeconds % 60;
+
+            document.getElementById('hours').textContent = hours < 10 ? '0' + hours : hours;
+            document.getElementById('minutes').textContent = minutes < 10 ? '0' + minutes : minutes;
+            document.getElementById('seconds').textContent = seconds < 10 ? '0' + seconds : seconds;
+
+            if (durationSeconds > 0) {
+                durationSeconds--;
+            }
+        }
+        setInterval(updateTimerDisplay, 1000);
+        updateTimerDisplay();
+    </script>
+</body>
+</html>
