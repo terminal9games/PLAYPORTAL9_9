@@ -4,10 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TERMINAL 9 - Game</title>
-    <!-- Favicon -->
     <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
     
-    <!-- Google Fonts: Montserrat -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
@@ -35,7 +33,6 @@
             display: none !important;
         }
 
-        
         #login-screen {
             display: flex;
             flex-direction: column;
@@ -73,6 +70,13 @@
             margin-bottom: 25px;
         }
 
+        .input-group {
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
         .input-box {
             width: 100%;
             background: transparent;
@@ -91,7 +95,16 @@
             border-color: #ffffff;
         }
 
-        
+        .error-msg {
+            color: #ff0055;
+            font-size: 0.85rem;
+            font-weight: 700;
+            margin-top: 12px;
+            letter-spacing: 0.5px;
+            min-height: 20px;
+            text-align: center;
+        }
+
         #game-screen {
             width: 100vw;
             height: 100vh;
@@ -100,12 +113,12 @@
             align-items: center;
             justify-content: center;
             position: relative;
-            background-color: #888888; /* Estado previo semitransparente (Imagen 3) */
+            background-color: #888888;
             transition: background-color 0.3s ease;
         }
 
         #game-screen.game-active {
-            background-color: #ffffff; /* Fondo blanco al arrancar juego (Imagen 4) */
+            background-color: #ffffff;
         }
 
         .pre-game-text {
@@ -150,14 +163,13 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
         }
 
-        
         .overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(0, 0, 0, 0.85); /* Semitransparente sobre el juego */
+            background: rgba(0, 0, 0, 0.85);
             backdrop-filter: blur(8px);
             display: flex;
             align-items: center;
@@ -177,7 +189,6 @@
             text-align: center;
         }
 
-        
         .eliminated-card {
             border: 2px solid #cc0000;
             box-shadow: 0 0 30px rgba(204, 0, 0, 0.3);
@@ -198,7 +209,6 @@
             margin-bottom: 50px;
         }
 
-        
         .passed-card {
             border: 2px solid #00cc44;
             box-shadow: 0 0 30px rgba(0, 204, 68, 0.3);
@@ -228,17 +238,18 @@
 </head>
 <body>
 
-
     <div id="login-screen">
         <div class="logo-header">
             <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
             <span class="brand-title">TERMINAL 9</span>
         </div>
         <h2 class="login-label">LOGIN</h2>
-        <input type="text" id="player-id-input" class="input-box" placeholder="Unique ID here" autocomplete="off">
+        <div class="input-group">
+            <input type="text" id="player-id-input" class="input-box" placeholder="Unique ID here" autocomplete="off">
+            <div id="error-message" class="error-msg"></div>
+        </div>
     </div>
 
-  
     <div id="game-screen" class="hidden">
         <div id="pre-game-header" class="pre-game-text">BEFORE STARTING READ THE INSTRUCTIONS</div>
         
@@ -247,7 +258,6 @@
         <button id="ready-btn" class="ready-btn">Ready!</button>
         <button id="trigger-btn" class="red-trigger-btn hidden"></button>
     </div>
-
 
     <div id="fail-overlay" class="overlay hidden">
         <div class="overlay-card eliminated-card">
@@ -260,7 +270,6 @@
             <p class="overlay-footer">*You can not longer Login, Thank you for participating!</p>
         </div>
     </div>
-
 
     <div id="pass-overlay" class="overlay hidden">
         <div class="overlay-card passed-card">
@@ -275,8 +284,7 @@
     </div>
 
     <script>
- 
-        const FIREBASE_DB_URL = "https://project-4162381477655572279-default-rtdb.firebaseio.com/";
+        const FIREBASE_DB_URL = "https://TU-PROYECTO-default-rtdb.firebaseio.com/players";
 
         let activePlayerId = null;
         let gameActive = false;
@@ -290,8 +298,11 @@
         });
 
         async function processLogin(inputId) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = "";
+
             if (!inputId.startsWith("T9-") || inputId.length < 7) {
-                alert("Please enter a valid Player ID (e.g. T9-04-1234)");
+                errorDiv.textContent = "Invalid ID format. Must start with T9-";
                 return;
             }
 
@@ -299,20 +310,18 @@
             let playerData = null;
 
             try {
-                
                 const response = await fetch(`${FIREBASE_DB_URL}/${inputId}.json`);
                 playerData = await response.json();
             } catch (err) {
-                console.error("Error conectando a la base de datos");
+                errorDiv.textContent = "Connection error. Try again.";
+                return;
             }
 
-           
             if (!playerData) {
-                playerData = { status: "active", current_day: 1 };
-                await savePlayerData(inputId, playerData);
+                errorDiv.textContent = "ID not found in database.";
+                return;
             }
 
-           
             if (playerData.status === "eliminated") {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('game-screen').classList.remove('hidden');
@@ -321,12 +330,10 @@
                 return;
             }
 
-           
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
         }
 
-       
         document.getElementById('ready-btn').addEventListener('click', function() {
             this.classList.add('hidden');
             document.getElementById('pre-game-header').classList.add('hidden');
@@ -351,13 +358,11 @@
             }, 50);
         }
 
-        
         document.getElementById('trigger-btn').addEventListener('click', function() {
             if (!gameActive) return;
             gameActive = false;
             clearInterval(gameInterval);
 
-            
             if (timerVal >= 7.00 && timerVal <= 7.99) {
                 handlePass();
             } else {
@@ -380,12 +385,10 @@
         async function savePlayerData(id, data) {
             try {
                 await fetch(`${FIREBASE_DB_URL}/${id}.json`, {
-                    method: 'PUT',
+                    method: 'PATCH',
                     body: JSON.stringify(data)
                 });
-            } catch (err) {
-                console.error("No se pudo guardar en la base de datos remota");
-            }
+            } catch (err) {}
         }
     </script>
 </body>
