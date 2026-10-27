@@ -35,7 +35,7 @@
             display: none !important;
         }
 
-        /* 1. LOGIN SCREEN (Imagen 2) */
+        
         #login-screen {
             display: flex;
             flex-direction: column;
@@ -91,7 +91,7 @@
             border-color: #ffffff;
         }
 
-        /* 2. GAME SCREEN (Imágenes 3 y 4) */
+        
         #game-screen {
             width: 100vw;
             height: 100vh;
@@ -150,7 +150,7 @@
             box-shadow: 0 0 10px rgba(0,0,0,0.3);
         }
 
-        /* OVERLAYS SEMITRANSPARENTES (Imágenes 5 y 6) */
+        
         .overlay {
             position: absolute;
             top: 0;
@@ -177,7 +177,7 @@
             text-align: center;
         }
 
-        /* Overlay Eliminado (Imagen 5) */
+        
         .eliminated-card {
             border: 2px solid #cc0000;
             box-shadow: 0 0 30px rgba(204, 0, 0, 0.3);
@@ -198,7 +198,7 @@
             margin-bottom: 50px;
         }
 
-        /* Overlay Aprobado (Imagen 6) */
+        
         .passed-card {
             border: 2px solid #00cc44;
             box-shadow: 0 0 30px rgba(0, 204, 68, 0.3);
@@ -228,7 +228,7 @@
 </head>
 <body>
 
-    <!-- 1. PANTALLA DE LOGIN -->
+
     <div id="login-screen">
         <div class="logo-header">
             <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
@@ -238,7 +238,7 @@
         <input type="text" id="player-id-input" class="input-box" placeholder="Unique ID here" autocomplete="off">
     </div>
 
-    <!-- 2. PANTALLA DEL JUEGO (DÍA 1) -->
+  
     <div id="game-screen" class="hidden">
         <div id="pre-game-header" class="pre-game-text">BEFORE STARTING READ THE INSTRUCTIONS</div>
         
@@ -248,7 +248,7 @@
         <button id="trigger-btn" class="red-trigger-btn hidden"></button>
     </div>
 
-    <!-- 3. OVERLAY: ELIMINATED (Imagen 5) -->
+
     <div id="fail-overlay" class="overlay hidden">
         <div class="overlay-card eliminated-card">
             <div class="logo-header">
@@ -261,7 +261,7 @@
         </div>
     </div>
 
-    <!-- 4. OVERLAY: PASSED (Imagen 6) -->
+
     <div id="pass-overlay" class="overlay hidden">
         <div class="overlay-card passed-card">
             <div class="logo-header">
@@ -275,8 +275,8 @@
     </div>
 
     <script>
-        // BASE DE DATOS REMOTA PRIVADA (Firebase REST)
-        const DB_BASE_URL = "https://terminal9-db-default-rtdb.firebaseio.com/players";
+ 
+        const FIREBASE_DB_URL = "https://project-4162381477655572279-default-rtdb.firebaseio.com/";
 
         let activePlayerId = null;
         let gameActive = false;
@@ -299,20 +299,20 @@
             let playerData = null;
 
             try {
-                // Fetch de base de datos remota
-                const res = await fetch(`${DB_BASE_URL}/${inputId}.json`);
-                playerData = await res.json();
+                
+                const response = await fetch(`${FIREBASE_DB_URL}/${inputId}.json`);
+                playerData = await response.json();
             } catch (err) {
-                // Si la red falla, usa persistencia local segura
-                playerData = JSON.parse(localStorage.getItem(inputId));
+                console.error("Error conectando a la base de datos");
             }
 
+           
             if (!playerData) {
-                // Auto-registro de nuevo jugador si no existe en la BD
                 playerData = { status: "active", current_day: 1 };
-                savePlayerData(inputId, playerData);
+                await savePlayerData(inputId, playerData);
             }
 
+           
             if (playerData.status === "eliminated") {
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('game-screen').classList.remove('hidden');
@@ -321,12 +321,12 @@
                 return;
             }
 
-            // Transición a pantalla de juego
+           
             document.getElementById('login-screen').classList.add('hidden');
             document.getElementById('game-screen').classList.remove('hidden');
         }
 
-        // Botón "Ready!"
+       
         document.getElementById('ready-btn').addEventListener('click', function() {
             this.classList.add('hidden');
             document.getElementById('pre-game-header').classList.add('hidden');
@@ -351,13 +351,13 @@
             }, 50);
         }
 
-        // Botón Rojo Disparador
+        
         document.getElementById('trigger-btn').addEventListener('click', function() {
             if (!gameActive) return;
             gameActive = false;
             clearInterval(gameInterval);
 
-            // Rango de victoria: 07.00s a 07.99s
+            
             if (timerVal >= 7.00 && timerVal <= 7.99) {
                 handlePass();
             } else {
@@ -365,24 +365,27 @@
             }
         });
 
-        function handlePass() {
+        async function handlePass() {
             const data = { status: "active", current_day: 2 };
-            savePlayerData(activePlayerId, data);
+            await savePlayerData(activePlayerId, data);
             document.getElementById('pass-overlay').classList.remove('hidden');
         }
 
-        function handleFail() {
+        async function handleFail() {
             const data = { status: "eliminated", current_day: 1 };
-            savePlayerData(activePlayerId, data);
+            await savePlayerData(activePlayerId, data);
             document.getElementById('fail-overlay').classList.remove('hidden');
         }
 
-        function savePlayerData(id, data) {
-            localStorage.setItem(id, JSON.stringify(data));
-            fetch(`${DB_BASE_URL}/${id}.json`, {
-                method: 'PUT',
-                body: JSON.stringify(data)
-            }).catch(() => {});
+        async function savePlayerData(id, data) {
+            try {
+                await fetch(`${FIREBASE_DB_URL}/${id}.json`, {
+                    method: 'PUT',
+                    body: JSON.stringify(data)
+                });
+            } catch (err) {
+                console.error("No se pudo guardar en la base de datos remota");
+            }
         }
     </script>
 </body>
