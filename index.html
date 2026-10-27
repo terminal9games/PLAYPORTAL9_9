@@ -3,15 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TERMINAL 9 - Instructions</title>
+    <title>TERMINAL 9 - Game</title>
     <!-- Favicon -->
     <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
     
-    <!-- Google Fonts: Montserrat & Montaser/Montserrat Arabic -->
+    <!-- Google Fonts: Montserrat -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,400;0,700;0,900;1,400&family=Montserrat+Arabic:wght@700;900&display=swap" rel="stylesheet">
-    
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
+
     <style>
         * {
             margin: 0;
@@ -25,77 +25,32 @@
             font-family: 'Montserrat', sans-serif;
             min-height: 100vh;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            justify-content: flex-start;
-            padding-top: 10px;
-            overflow-x: hidden;
-        }
-
-        /* TEMPORIZADOR ROJO SUPERIOR (Montaser Arabic) */
-        .timer-header-wrapper {
-            width: 100%;
-            display: flex;
             justify-content: center;
-            margin-bottom: 30px;
-        }
-
-        .timer-container {
+            overflow: hidden;
             position: relative;
-            background: #000000;
-            border-bottom: 2px solid #ff0000;
-            border-left: 2px solid #ff0000;
-            border-right: 2px solid #ff0000;
-            border-bottom-left-radius: 40px;
-            border-bottom-right-radius: 40px;
-            padding: 15px 45px 12px 45px;
-            display: flex;
-            gap: 30px;
-            box-shadow: 0 0 25px rgba(255, 0, 0, 0.4);
         }
 
-        .timer-block {
+        .hidden {
+            display: none !important;
+        }
+
+        /* 1. LOGIN SCREEN (Imagen 2) */
+        #login-screen {
             display: flex;
             flex-direction: column;
             align-items: center;
-        }
-
-        .timer-digit {
-            font-family: 'Montserrat Arabic', 'Montserrat', sans-serif;
-            font-weight: 900;
-            font-size: 3.2rem;
-            color: #e60000;
-            line-height: 1;
-            text-shadow: 0 0 15px rgba(255, 0, 0, 0.7);
-        }
-
-        .timer-label {
-            font-family: 'Montserrat', sans-serif;
-            font-size: 0.75rem;
-            color: #e60000;
-            margin-top: 4px;
-        }
-
-        /* TARJETA DE INSTRUCCIONES (Imagen 1) */
-        .card-container {
-            width: 90%;
-            max-width: 900px;
-            background: rgba(10, 10, 12, 0.95);
-            border: 2px solid rgba(255, 255, 255, 0.25);
-            border-radius: 12px;
-            padding: 50px 30px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-            margin-bottom: 25px;
+            width: 100%;
+            max-width: 500px;
+            padding: 20px;
+            z-index: 10;
         }
 
         .logo-header {
             display: flex;
             align-items: center;
             gap: 12px;
-            margin-bottom: 45px;
+            margin-bottom: 40px;
         }
 
         .logo-img {
@@ -106,92 +61,329 @@
         }
 
         .brand-title {
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 900;
-            font-size: 1.8rem;
-            letter-spacing: 2px;
-        }
-
-        .day-title {
-            font-family: 'Montserrat', sans-serif;
             font-weight: 900;
             font-size: 1.6rem;
             letter-spacing: 2px;
-            margin-bottom: 45px;
+        }
+
+        .login-label {
+            font-weight: 900;
+            font-size: 1.2rem;
+            letter-spacing: 2px;
+            margin-bottom: 25px;
+        }
+
+        .input-box {
+            width: 100%;
+            background: transparent;
+            border: 2px solid rgba(255, 255, 255, 0.4);
+            border-radius: 14px;
+            padding: 16px 20px;
+            color: #ffffff;
+            font-family: 'Montserrat', sans-serif;
+            font-size: 1.1rem;
+            text-align: center;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+
+        .input-box:focus {
+            border-color: #ffffff;
+        }
+
+        /* 2. GAME SCREEN (Imágenes 3 y 4) */
+        #game-screen {
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background-color: #888888; /* Estado previo semitransparente (Imagen 3) */
+            transition: background-color 0.3s ease;
+        }
+
+        #game-screen.game-active {
+            background-color: #ffffff; /* Fondo blanco al arrancar juego (Imagen 4) */
+        }
+
+        .pre-game-text {
+            color: #ffffff;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            margin-bottom: 40px;
             text-transform: uppercase;
         }
 
-        .instructions-body {
-            font-family: 'Montserrat', sans-serif;
-            font-weight: 400;
-            font-size: 1.25rem;
-            line-height: 1.6;
-            color: #e0e0e0;
-            max-width: 750px;
-            margin-bottom: 20px;
+        .game-timer-display {
+            font-size: 5rem;
+            font-weight: 900;
+            color: #00ffaa;
+            text-shadow: 0 0 20px rgba(0, 255, 170, 0.6);
+            margin-bottom: 30px;
         }
 
-        .footer-note {
+        .ready-btn {
+            background: #ffffff;
+            border: 2px solid #e0c870;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            padding: 12px 35px;
+            border-radius: 12px;
             font-family: 'Montserrat', sans-serif;
-            font-size: 0.95rem;
-            color: #888888;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: #000000;
+            cursor: pointer;
+            z-index: 5;
+        }
+
+        .red-trigger-btn {
+            width: 75px;
+            height: 75px;
+            background-color: #aa0000;
+            border: 2px solid #000000;
+            border-radius: 50%;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 10px rgba(0,0,0,0.3);
+        }
+
+        /* OVERLAYS SEMITRANSPARENTES (Imágenes 5 y 6) */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85); /* Semitransparente sobre el juego */
+            backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .overlay-card {
+            width: 90%;
+            max-width: 800px;
+            background: rgba(10, 10, 12, 0.95);
+            padding: 60px 30px;
+            border-radius: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+        }
+
+        /* Overlay Eliminado (Imagen 5) */
+        .eliminated-card {
+            border: 2px solid #cc0000;
+            box-shadow: 0 0 30px rgba(204, 0, 0, 0.3);
+        }
+
+        .eliminated-title {
+            color: #cc0000;
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 20px rgba(204, 0, 0, 0.6);
+        }
+
+        .eliminated-subtext {
+            color: #ffffff;
+            font-size: 1.2rem;
+            margin-bottom: 50px;
+        }
+
+        /* Overlay Aprobado (Imagen 6) */
+        .passed-card {
+            border: 2px solid #00cc44;
+            box-shadow: 0 0 30px rgba(0, 204, 68, 0.3);
+        }
+
+        .passed-title {
+            color: #00cc44;
+            font-size: 3.5rem;
+            font-weight: 900;
+            letter-spacing: 3px;
+            margin-bottom: 15px;
+            text-shadow: 0 0 20px rgba(0, 204, 68, 0.6);
+        }
+
+        .passed-subtext {
+            color: #ffffff;
+            font-size: 1.2rem;
+            margin-bottom: 50px;
+        }
+
+        .overlay-footer {
+            color: #777777;
+            font-size: 0.9rem;
             font-style: italic;
         }
     </style>
 </head>
 <body>
 
-    <!-- TEMPORIZADOR ROJO 20:00:00 -->
-    <div class="timer-header-wrapper">
-        <div class="timer-container">
-            <div class="timer-block">
-                <span class="timer-digit" id="hours">20</span>
-                <span class="timer-label">Hours</span>
-            </div>
-            <div class="timer-block">
-                <span class="timer-digit" id="minutes">00</span>
-                <span class="timer-label">Minutes</span>
-            </div>
-            <div class="timer-block">
-                <span class="timer-digit" id="seconds">00</span>
-                <span class="timer-label">Seconds</span>
-            </div>
-        </div>
-    </div>
-
-    <!-- TARJETA INSTRUCCIONES -->
-    <div class="card-container">
+    <!-- 1. PANTALLA DE LOGIN -->
+    <div id="login-screen">
         <div class="logo-header">
             <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
             <span class="brand-title">TERMINAL 9</span>
         </div>
+        <h2 class="login-label">LOGIN</h2>
+        <input type="text" id="player-id-input" class="input-box" placeholder="Unique ID here" autocomplete="off">
+    </div>
 
-        <h1 class="day-title">DAY 1</h1>
+    <!-- 2. PANTALLA DEL JUEGO (DÍA 1) -->
+    <div id="game-screen" class="hidden">
+        <div id="pre-game-header" class="pre-game-text">BEFORE STARTING READ THE INSTRUCTIONS</div>
+        
+        <div id="timer-display" class="game-timer-display">60.00</div>
+        
+        <button id="ready-btn" class="ready-btn">Ready!</button>
+        <button id="trigger-btn" class="red-trigger-btn hidden"></button>
+    </div>
 
-        <div class="instructions-body">
-            Here goes the instructions in montserrat font
+    <!-- 3. OVERLAY: ELIMINATED (Imagen 5) -->
+    <div id="fail-overlay" class="overlay hidden">
+        <div class="overlay-card eliminated-card">
+            <div class="logo-header">
+                <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
+                <span class="brand-title">TERMINAL 9</span>
+            </div>
+            <h1 class="eliminated-title">ELIMINATED</h1>
+            <p id="eliminated-day-text" class="eliminated-subtext">You made it until DAY 1</p>
+            <p class="overlay-footer">*You can not longer Login, Thank you for participating!</p>
         </div>
     </div>
 
-    <p class="footer-note">*If you are a player, dont let the timer runs out</p>
+    <!-- 4. OVERLAY: PASSED (Imagen 6) -->
+    <div id="pass-overlay" class="overlay hidden">
+        <div class="overlay-card passed-card">
+            <div class="logo-header">
+                <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
+                <span class="brand-title">TERMINAL 9</span>
+            </div>
+            <h1 class="passed-title">PASSED</h1>
+            <p class="passed-subtext">Check Discord or the instructions for the next game</p>
+            <p class="overlay-footer">*Remember to login back tomorrow!</p>
+        </div>
+    </div>
 
     <script>
-        let durationSeconds = 20 * 60 * 60;
-        function updateTimerDisplay() {
-            let hours = Math.floor(durationSeconds / 3600);
-            let minutes = Math.floor((durationSeconds % 3600) / 60);
-            let seconds = durationSeconds % 60;
+        // BASE DE DATOS REMOTA PRIVADA (Firebase REST)
+        const DB_BASE_URL = "https://terminal9-db-default-rtdb.firebaseio.com/players";
 
-            document.getElementById('hours').textContent = hours < 10 ? '0' + hours : hours;
-            document.getElementById('minutes').textContent = minutes < 10 ? '0' + minutes : minutes;
-            document.getElementById('seconds').textContent = seconds < 10 ? '0' + seconds : seconds;
+        let activePlayerId = null;
+        let gameActive = false;
+        let timerVal = 60.00;
+        let gameInterval = null;
 
-            if (durationSeconds > 0) {
-                durationSeconds--;
+        document.getElementById('player-id-input').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') {
+                processLogin(this.value.trim());
             }
+        });
+
+        async function processLogin(inputId) {
+            if (!inputId.startsWith("T9-") || inputId.length < 7) {
+                alert("Please enter a valid Player ID (e.g. T9-04-1234)");
+                return;
+            }
+
+            activePlayerId = inputId;
+            let playerData = null;
+
+            try {
+                // Fetch de base de datos remota
+                const res = await fetch(`${DB_BASE_URL}/${inputId}.json`);
+                playerData = await res.json();
+            } catch (err) {
+                // Si la red falla, usa persistencia local segura
+                playerData = JSON.parse(localStorage.getItem(inputId));
+            }
+
+            if (!playerData) {
+                // Auto-registro de nuevo jugador si no existe en la BD
+                playerData = { status: "active", current_day: 1 };
+                savePlayerData(inputId, playerData);
+            }
+
+            if (playerData.status === "eliminated") {
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                document.getElementById('eliminated-day-text').textContent = `You made it until DAY ${playerData.current_day}`;
+                document.getElementById('fail-overlay').classList.remove('hidden');
+                return;
+            }
+
+            // Transición a pantalla de juego
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
         }
-        setInterval(updateTimerDisplay, 1000);
-        updateTimerDisplay();
+
+        // Botón "Ready!"
+        document.getElementById('ready-btn').addEventListener('click', function() {
+            this.classList.add('hidden');
+            document.getElementById('pre-game-header').classList.add('hidden');
+            document.getElementById('trigger-btn').classList.remove('hidden');
+            document.getElementById('game-screen').classList.add('game-active');
+            
+            startCountdown();
+        });
+
+        function startCountdown() {
+            gameActive = true;
+            timerVal = 60.00;
+            
+            gameInterval = setInterval(() => {
+                timerVal -= 0.05;
+                if (timerVal <= 0) {
+                    timerVal = 0.00;
+                    clearInterval(gameInterval);
+                    if (gameActive) handleFail();
+                }
+                document.getElementById('timer-display').textContent = timerVal.toFixed(2);
+            }, 50);
+        }
+
+        // Botón Rojo Disparador
+        document.getElementById('trigger-btn').addEventListener('click', function() {
+            if (!gameActive) return;
+            gameActive = false;
+            clearInterval(gameInterval);
+
+            // Rango de victoria: 07.00s a 07.99s
+            if (timerVal >= 7.00 && timerVal <= 7.99) {
+                handlePass();
+            } else {
+                handleFail();
+            }
+        });
+
+        function handlePass() {
+            const data = { status: "active", current_day: 2 };
+            savePlayerData(activePlayerId, data);
+            document.getElementById('pass-overlay').classList.remove('hidden');
+        }
+
+        function handleFail() {
+            const data = { status: "eliminated", current_day: 1 };
+            savePlayerData(activePlayerId, data);
+            document.getElementById('fail-overlay').classList.remove('hidden');
+        }
+
+        function savePlayerData(id, data) {
+            localStorage.setItem(id, JSON.stringify(data));
+            fetch(`${DB_BASE_URL}/${id}.json`, {
+                method: 'PUT',
+                body: JSON.stringify(data)
+            }).catch(() => {});
+        }
     </script>
 </body>
 </html>
