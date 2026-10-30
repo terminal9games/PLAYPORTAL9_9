@@ -43,6 +43,25 @@
   .rbtn { border-color:var(--red); color:var(--red); text-shadow:0 0 10px var(--red); box-shadow:0 0 16px rgba(255,0,85,.4); }
   .dots i { font-style:normal; animation:blink 1.2s infinite; } .dots i:nth-child(2) { animation-delay:.25s; } .dots i:nth-child(3) { animation-delay:.5s; }
   @keyframes blink { 0%,20% { opacity:0; } 40%,100% { opacity:1; } }
+  /* day 2 chat */
+  .chat { position:fixed; left:50%; bottom:0; transform:translateX(-50%); width:min(430px,96vw); z-index:4; display:none; }
+  .chat.on { display:block; }
+  #chatTab { display:block; width:100%; padding:11px 16px; font:700 13px 'Montserrat',sans-serif; color:#fff; background:rgba(20,20,26,.92); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.35); border-bottom:0; border-radius:12px 12px 0 0; cursor:pointer; }
+  #chatTab:hover,#chatTab:focus-visible { border-color:var(--cyan); outline:none; }
+  #chatDot { display:none; width:8px; height:8px; margin-left:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); vertical-align:middle; }
+  #chatDot.on { display:inline-block; }
+  #chatPanel { display:none; flex-direction:column; height:min(46vh,340px); background:rgba(10,10,14,.94); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.35); border-bottom:0; border-top:1px solid rgba(255,255,255,.12); }
+  .chat.open #chatPanel { display:flex; animation:up .25s ease both; }
+  #chatLog { flex:1; overflow-y:auto; padding:12px 14px; text-align:left; font-size:13px; line-height:1.5; }
+  #chatLog .m { margin:0 0 8px; word-break:break-word; }
+  #chatLog .who { font-weight:700; margin-right:6px; color:#aaa; }
+  #chatLog .me .who { color:var(--cyan); }
+  #chatLog .empty { color:#888; text-align:center; margin-top:18px; }
+  #chatForm { display:flex; gap:8px; padding:10px; border-top:1px solid rgba(255,255,255,.12); }
+  #chatIn { flex:1; width:auto; padding:9px 12px; font-size:14px; text-align:left; border-width:1px; border-radius:8px; }
+  #chatSend { padding:9px 16px; font:700 13px 'Montserrat',sans-serif; color:var(--cyan); background:rgba(255,255,255,.04); border:1px solid var(--cyan); border-radius:8px; cursor:pointer; }
+  #chatNote { min-height:16px; padding:0 14px 8px; font-size:11px; color:var(--red); text-align:left; }
+  @keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
   /* day 4 */
   #term { width:min(560px,92vw); min-height:170px; padding:16px; margin-bottom:16px; text-align:left; white-space:pre-wrap; font:14px/1.7 'Courier New',monospace; color:#39ff14; text-shadow:0 0 6px rgba(57,255,20,.7); background:rgba(2,10,4,.85); border:1px solid rgba(57,255,20,.4); border-radius:10px; box-shadow:0 0 22px rgba(57,255,20,.18), inset 0 0 30px rgba(57,255,20,.06); }
   #term::after { content:'_'; animation:blink 1s steps(1) infinite; }
@@ -61,7 +80,7 @@
   #elim .box { border-color:var(--red); box-shadow:0 0 22px rgba(255,0,85,.5), inset 0 0 22px rgba(255,0,85,.2); }
   #elim h1 { color:var(--red); text-shadow:0 0 18px var(--red); }
   @keyframes in { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
-  @media (prefers-reduced-motion:reduce) { .screen.on,.ov.on { animation:none; } }
+  @media (prefers-reduced-motion:reduce) { .screen.on,.ov.on,.chat.open #chatPanel { animation:none; } }
 </style>
 </head>
 <body>
@@ -121,6 +140,18 @@
   <p id="tries" style="font-size:13px"></p>
 </section>
 
+<div id="chat" class="chat">
+  <button id="chatTab" type="button" aria-expanded="false" aria-controls="chatPanel">Chat with your rival<span id="chatDot" aria-label="New messages"></span></button>
+  <div id="chatPanel">
+    <div id="chatLog" aria-live="polite"></div>
+    <div id="chatNote" role="alert"></div>
+    <div id="chatForm">
+      <input id="chatIn" maxlength="200" placeholder="Write a message" autocomplete="off" aria-label="Message">
+      <button id="chatSend" type="button">Send</button>
+    </div>
+  </div>
+</div>
+
 <div id="pass" class="ov"><div class="box">
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
   <h1>PASSED</h1><p>Check Discord or the instructions for the next game</p>
@@ -157,6 +188,7 @@ $('uid').addEventListener('keydown', async e => {
 
 function route(v) {
   clearTimeout(pollT);
+  chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
   if (v.screen === 'passed') return $('pass').classList.add('on');
   if (v.screen === 'reveal') return reveal(v);
@@ -234,6 +266,58 @@ $('sendBtn').onclick = async () => {
   if (noise) $('audioBtn').click();
   try { route((await call('code', { code: c })).view); } catch { $('d4err').textContent = 'Connection error. Try again.'; }
 };
+
+// ---- Day 2 chat ----
+const RIVAL = 'T9-???????';   // the rival's real ID is never sent to the browser
+let chatOn = false, chatOpen = false, chatT, chatSeen = 0, chatBusy = false, chatSig = '';
+function chatSet(on) {
+  if (on === chatOn) return;
+  chatOn = on; $('chat').classList.toggle('on', on);
+  if (on) chatPoll();
+  else { clearTimeout(chatT); chatOpen = false; $('chat').classList.remove('open'); $('chatTab').setAttribute('aria-expanded', 'false'); }
+}
+async function chatPoll() {
+  clearTimeout(chatT);
+  if (!chatOn) return;
+  if (!document.hidden) { try { chatRender(await call('chatGet')); } catch {} }
+  chatT = setTimeout(chatPoll, chatOpen ? 2500 : 6000);
+}
+function chatRender(d) {
+  const log = $('chatLog'), list = d.messages || [];
+  $('chatIn').disabled = $('chatSend').disabled = !d.open;
+  if (!d.open) $('chatNote').textContent = 'Chat is closed.';
+  const sig = list.length + '|' + (list.length ? list[list.length - 1].text : '');
+  if (sig !== chatSig) {
+    chatSig = sig;
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.textContent = '';
+    if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'No messages yet. Say hi to your rival.'; log.appendChild(e); }
+    for (const m of list) {
+      const row = document.createElement('div'); row.className = 'm' + (m.me ? ' me' : '');
+      const who = document.createElement('span'); who.className = 'who'; who.textContent = m.me ? 'You' : RIVAL;
+      row.appendChild(who); row.appendChild(document.createTextNode(m.text));   // textContent only: no HTML injection
+      log.appendChild(row);
+    }
+    if (atEnd || chatOpen) log.scrollTop = log.scrollHeight;
+  }
+  if (chatOpen) chatSeen = list.length;
+  $('chatDot').classList.toggle('on', !chatOpen && list.length > chatSeen);
+}
+$('chatTab').onclick = () => {
+  chatOpen = !chatOpen;
+  $('chat').classList.toggle('open', chatOpen); $('chatTab').setAttribute('aria-expanded', chatOpen);
+  if (chatOpen) { $('chatDot').classList.remove('on'); $('chatLog').scrollTop = $('chatLog').scrollHeight; $('chatIn').focus(); chatPoll(); }
+};
+async function chatSend() {
+  const t = $('chatIn').value.trim();
+  if (!t || chatBusy) return;
+  chatBusy = true; $('chatNote').textContent = '';
+  try { $('chatIn').value = ''; chatRender(await call('chatSend', { text: t })); }
+  catch (x) { $('chatIn').value = t; $('chatNote').textContent = (x && x.error) || 'Connection error. Try again.'; }
+  chatBusy = false;
+}
+$('chatSend').onclick = chatSend;
+$('chatIn').addEventListener('keydown', e => { if (e.key === 'Enter') chatSend(); });
 
 // ---- Day 2 ----
 document.querySelectorAll('.opt[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock'); });
