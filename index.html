@@ -30,7 +30,6 @@
   #cd { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 54px 'Montserrat',sans-serif; color:#111; text-shadow:0 0 18px rgba(47,245,208,.8); opacity:0; transition:opacity .25s; pointer-events:none; z-index:2; }
   #cd.show { opacity:1; }
   /* day 2 */
-  /* day 2 */
   #d2 { background:rgba(0,0,0,.4); }
   .d2v { display:none; flex-direction:column; align-items:center; gap:18px; }
   .d2v.on { display:flex; animation:in .6s ease both; }
@@ -67,10 +66,21 @@
   #term::after { content:'_'; animation:blink 1s steps(1) infinite; }
   #code { letter-spacing:12px; font-size:22px; width:min(240px,70vw); }
   #d4err { color:var(--red); font-size:13px; min-height:18px; }
+  /* day 5: Simon */
+  #d5info { font:700 13px 'Montserrat',sans-serif; color:#aaa; letter-spacing:2px; margin-bottom:6px; }
+  #d5msg { font:700 22px 'Montserrat',sans-serif; min-height:30px; margin-bottom:22px; }
+  #pads { display:grid; grid-template-columns:1fr 1fr; gap:14px; width:min(340px,80vw); }
+  .pad { aspect-ratio:1; border-radius:18px; border:2px solid; cursor:pointer; background:rgba(255,255,255,.03); transition:background .12s, box-shadow .12s; }
+  .pad:disabled { cursor:default; }
+  .pad[data-i="0"] { border-color:var(--cyan); --c:#00f3ff; }
+  .pad[data-i="1"] { border-color:var(--red); --c:#ff0055; }
+  .pad[data-i="2"] { border-color:var(--green); --c:#39ff14; }
+  .pad[data-i="3"] { border-color:#ffd400; --c:#ffd400; }
+  .pad.lit { background:var(--c); box-shadow:0 0 34px var(--c); }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
-  .ov .box { height:100%; border:3px solid; border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; position:relative; }
+  .ov .box { height:100%; border:3px solid; border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; position:relative; padding:20px; }
   .ov h1 { margin:0; font-size:clamp(36px,9vw,56px); }
   .ov p { margin:8px 0 0; font-size:15px; }
   .ov small { position:absolute; bottom:16px; font-size:12px; }
@@ -79,6 +89,11 @@
   #pass h1 { color:var(--green); text-shadow:0 0 18px var(--green); }
   #elim .box { border-color:var(--red); box-shadow:0 0 22px rgba(255,0,85,.5), inset 0 0 22px rgba(255,0,85,.2); }
   #elim h1 { color:var(--red); text-shadow:0 0 18px var(--red); }
+  /* fullscreen notice */
+  #fs { z-index:9; }
+  #fs .box { border-color:var(--cyan); box-shadow:0 0 22px rgba(0,243,255,.5), inset 0 0 22px rgba(0,243,255,.2); }
+  #fs h1 { color:var(--cyan); text-shadow:0 0 18px var(--cyan); font-size:clamp(24px,6vw,40px); }
+  #fs .row2 { margin-top:26px; }
   @keyframes in { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
   @media (prefers-reduced-motion:reduce) { .screen.on,.ov.on,.chat.open #chatPanel { animation:none; } }
 </style>
@@ -140,6 +155,18 @@
   <p id="tries" style="font-size:13px"></p>
 </section>
 
+<section id="d5" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="d5info"></div>
+  <div id="d5msg" aria-live="polite"></div>
+  <div id="pads">
+    <button class="pad" data-i="0" aria-label="Cyan"></button>
+    <button class="pad" data-i="1" aria-label="Red"></button>
+    <button class="pad" data-i="2" aria-label="Green"></button>
+    <button class="pad" data-i="3" aria-label="Yellow"></button>
+  </div>
+</section>
+
 <div id="chat" class="chat">
   <button id="chatTab" type="button" aria-expanded="false" aria-controls="chatPanel">Chat with your rival<span id="chatDot" aria-label="New messages"></span></button>
   <div id="chatPanel">
@@ -162,6 +189,12 @@
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
   <h1>ELIMINATED</h1><p id="elimDay">You made it until DAY x</p>
   <small>*You can not longer Login, Thank you for participating!</small>
+</div></div>
+
+<div id="fs" class="ov" role="dialog" aria-label="Fullscreen recommended"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>We recommend you to play in fullscreen</h1>
+  <div class="row2"><button id="fsGo" class="gbtn">Go fullscreen</button><button id="fsNo" class="opt">Not now</button></div>
 </div></div>
 
 <script>
@@ -187,7 +220,7 @@ $('uid').addEventListener('keydown', async e => {
 });
 
 function route(v) {
-  clearTimeout(pollT);
+  clearTimeout(pollT); d5run++;
   chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
   if (v.screen === 'passed') return $('pass').classList.add('on');
@@ -211,6 +244,7 @@ function route(v) {
     $('code').value = '';
     return typeClues(v.clues);
   }
+  if (v.screen === 'day5') return playD5(v);
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
 }
 
@@ -266,6 +300,50 @@ $('sendBtn').onclick = async () => {
   if (noise) $('audioBtn').click();
   try { route((await call('code', { code: c })).view); } catch { $('d4err').textContent = 'Connection error. Try again.'; }
 };
+
+// ---- Day 5: Simon ----
+// The server holds the whole sequence and only sends the part for the current level.
+// Tapping the full sequence correctly moves you to the next level; one mistake eliminates you.
+const PADS = [...document.querySelectorAll('.pad')];
+const TONES = [262, 330, 392, 523];
+let d5run = 0, d5lock = true, d5in = [], d5lvl = 0;
+function beep(i) {
+  try {
+    const ac = window.__ac = window.__ac || new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.value = TONES[i]; g.gain.value = 0.08;
+    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.25);
+  } catch {}
+}
+async function flash(i, ms = 450) {
+  PADS[i].classList.add('lit'); beep(i);
+  await sleep(ms); PADS[i].classList.remove('lit');
+}
+async function playD5(v) {
+  const run = ++d5run;
+  show('d5'); d5in = []; d5lock = true; d5lvl = v.level;
+  $('d5info').textContent = 'LEVEL ' + v.level + ' / ' + v.total;
+  $('d5msg').textContent = 'Watch the sequence';
+  PADS.forEach(b => b.disabled = true);
+  await sleep(900);
+  for (const i of v.seq) {
+    if (run !== d5run) return;
+    await flash(i); await sleep(200);
+  }
+  if (run !== d5run) return;
+  $('d5msg').textContent = 'Your turn';
+  PADS.forEach(b => b.disabled = false); d5lock = false;
+}
+PADS.forEach(b => b.onclick = async () => {
+  if (d5lock) return;
+  const i = Number(b.dataset.i);
+  d5in.push(i); flash(i, 220);
+  if (d5in.length < d5lvl) return;
+  d5lock = true; PADS.forEach(x => x.disabled = true);
+  $('d5msg').textContent = 'Checking...';
+  try { route((await call('seq', { seq: d5in })).view); }
+  catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
+});
 
 // ---- Day 2 chat ----
 const RIVAL = 'T9-???????';   // the rival's real ID is never sent to the browser
@@ -343,6 +421,16 @@ async function reveal(v) {
   await sleep(2500);
   try { await call('ack'); } catch {}
   if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+}
+
+// ---- Fullscreen notice ----
+// Browsers only allow fullscreen after a click or tap, so the page asks first.
+// If the browser has no fullscreen support (iPhone Safari), the notice is skipped.
+{
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req && !document.fullscreenElement && !document.webkitFullscreenElement) $('fs').classList.add('on');
+  $('fsGo').onclick = () => { try { Promise.resolve(req.call(el)).catch(() => {}); } catch {} $('fs').classList.remove('on'); };
+  $('fsNo').onclick = () => $('fs').classList.remove('on');
 }
 </script>
 </body>
