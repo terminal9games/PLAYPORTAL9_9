@@ -17,8 +17,8 @@ module.exports = async (req, res) => {
     if (action === 'setDay') await db.ref('config/active_day').set(Number(value));
     else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
       const p = (await pref.get()).val(); if (!p) return res.status(404).json({ error: 'not found' });
-      await pref.update({ status: value, reveal: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
-    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null });
+      await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
+    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null });
     else if (action === 'add') {
       const k = String(id || '').toUpperCase();
       if (!/^T9-[A-Z0-9-]{3,20}$/.test(k)) return res.status(400).json({ error: 'bad id' });
