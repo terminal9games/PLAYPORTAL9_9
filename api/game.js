@@ -1,4 +1,4 @@
-const { db, sign, verify } = require('./_lib');
+const { db, sign, verify, maintain } = require('./_lib');
 const ID = /^T9-[A-Z0-9-]{3,20}$/;
 const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
 
@@ -18,10 +18,11 @@ module.exports = async (req, res) => {
     }
     const ref = db.ref('players/' + uid);
     const load = async () => (await ref.get()).val();
+    const st = await maintain();
+    const day = st.day;
     let p = await load();
-    const day = (await db.ref('config/active_day').get()).val() || 1;
     const now = Date.now();
-    const live = () => p.status === 'active' && p.current_day === day;
+    const live = () => p.status === 'active' && p.current_day === day && !st.closed;
 
     // Admin reset the player to Day 1: clear leftovers from the previous attempt
     if (day === 1 && live() && p.d1_done) { await ref.update({ d1_start: null, d1_done: null }); p = await load(); }
@@ -48,6 +49,10 @@ module.exports = async (req, res) => {
       const cref = db.ref(`pairs/day2/${p.pair}/choice_${slot}`);
       if (!(await cref.get()).exists()) await cref.set(choice);
     }
+    if (action === 'pick' && day === 3 && live() && Number.isInteger(choice) && choice >= 0 && choice <= 100) {
+      const cref = db.ref('day3/choices/' + uid);
+      if (!(await cref.get()).exists()) await cref.set(choice);
+    }
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
 
     const day2view = async () => {
@@ -68,12 +73,19 @@ module.exports = async (req, res) => {
       return { screen: 'reveal', ...p.reveal };
     };
 
+    const day3view = async () => {
+      const c = (await db.ref('day3/choices/' + uid).get()).val();
+      return typeof c === 'number' ? { screen: 'wait3' } : { screen: 'pick3' };
+    };
+
     let view;
     if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
     else if (p.status === 'winner' || p.current_day > day) view = { screen: 'passed' };
+    else if (st.closed) view = { screen: 'none', msg: 'This day is closed.' };
     else if (day === 1) view = { screen: 'day1', startAt: p.d1_start || null, now: Date.now() };
     else if (day === 2) view = await day2view();
+    else if (day === 3) view = await day3view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid) : undefined, view, now: Date.now() });
