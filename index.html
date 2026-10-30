@@ -43,6 +43,11 @@
   .rbtn { border-color:var(--red); color:var(--red); text-shadow:0 0 10px var(--red); box-shadow:0 0 16px rgba(255,0,85,.4); }
   .dots i { font-style:normal; animation:blink 1.2s infinite; } .dots i:nth-child(2) { animation-delay:.25s; } .dots i:nth-child(3) { animation-delay:.5s; }
   @keyframes blink { 0%,20% { opacity:0; } 40%,100% { opacity:1; } }
+  /* day 4 */
+  #term { width:min(560px,92vw); min-height:170px; padding:16px; margin-bottom:16px; text-align:left; white-space:pre-wrap; font:14px/1.7 'Courier New',monospace; color:#39ff14; text-shadow:0 0 6px rgba(57,255,20,.7); background:rgba(2,10,4,.85); border:1px solid rgba(57,255,20,.4); border-radius:10px; box-shadow:0 0 22px rgba(57,255,20,.18), inset 0 0 30px rgba(57,255,20,.06); }
+  #term::after { content:'_'; animation:blink 1s steps(1) infinite; }
+  #code { letter-spacing:12px; font-size:22px; width:min(240px,70vw); }
+  #d4err { color:var(--red); font-size:13px; min-height:18px; }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -106,6 +111,16 @@
   </div>
 </section>
 
+<section id="d4" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="term"></div>
+  <div class="row2" style="margin-bottom:14px"><button id="audioBtn" class="opt">Play signal</button></div>
+  <input id="code" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+  <div id="d4err" role="alert"></div>
+  <button id="sendBtn" class="gbtn">Send code</button>
+  <p id="tries" style="font-size:13px"></p>
+</section>
+
 <div id="pass" class="ov"><div class="box">
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
   <h1>PASSED</h1><p>Check Discord or the instructions for the next game</p>
@@ -157,6 +172,13 @@ function route(v) {
     pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { route(v); } }, v.screen === 'wait3' ? 10000 : 5000);
     return;
   }
+  if (v.screen === 'day4') {
+    show('d4');
+    $('tries').textContent = 'Attempts left: ' + v.left;
+    $('d4err').textContent = v.wrong ? 'Wrong code. The terminal rejects it.' : '';
+    $('code').value = '';
+    return typeClues(v.clues);
+  }
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
 }
 
@@ -186,6 +208,32 @@ async function press() {
   if (over) return; over = true; cancelAnimationFrame(raf);
   try { route((await call('press')).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
 }
+
+// ---- Day 4: Echoes of Terminal 9 ----
+let typed = false, noise;
+async function typeClues(lines) {
+  if (typed) return; typed = true;
+  $('term').textContent = '';
+  for (const l of ['> TERMINAL 9 // ECHO RECEIVER', '> signal found...', ''].concat(lines)) {
+    for (const ch of l + '\n') { $('term').textContent += ch; await sleep(18); }
+  }
+}
+$('audioBtn').onclick = () => {
+  if (noise) { noise.stop(); noise = null; $('audioBtn').textContent = 'Play signal'; return; }
+  const ac = window.__ac = window.__ac || new (window.AudioContext || window.webkitAudioContext)();
+  const buf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  noise = ac.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const g = ac.createGain(); g.gain.value = 0.08; noise.connect(g).connect(ac.destination); noise.start();
+  $('audioBtn').textContent = 'Stop signal';
+};
+$('code').oninput = e => { e.target.value = e.target.value.replace(/\D/g, ''); };
+$('sendBtn').onclick = async () => {
+  const c = $('code').value;
+  if (c.length !== 4) return $('d4err').textContent = 'Enter 4 digits.';
+  if (noise) $('audioBtn').click();
+  try { route((await call('code', { code: c })).view); } catch { $('d4err').textContent = 'Connection error. Try again.'; }
+};
 
 // ---- Day 2 ----
 document.querySelectorAll('.opt[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock'); });
