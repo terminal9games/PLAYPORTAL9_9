@@ -1,4 +1,4 @@
-const { admin, db } = require('./_lib');
+const { admin, db, maintain, closeNow } = require('./_lib');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
@@ -11,11 +11,17 @@ module.exports = async (req, res) => {
   try {
     const pref = id && db.ref('players/' + String(id).toUpperCase());
     if (action === 'list') {
-      const [pl, d] = await Promise.all([db.ref('players').get(), db.ref('config/active_day').get()]);
-      return res.json({ players: pl.val() || {}, activeDay: d.val() || 1 });
+      const st = await maintain();
+      const pl = await db.ref('players').get();
+      return res.json({ players: pl.val() || {}, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
-    if (action === 'setDay') await db.ref('config/active_day').set(Number(value));
-    else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
+    if (action === 'setDay') {
+      const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
+      await db.ref('config').update({ active_day: Number(value), ends_at: Date.now() + mins * 60000, closed_day: null, duration_min: mins });
+      await db.ref('day' + Number(value)).remove(); // old test data for that day
+    } else if (action === 'close') {
+      return res.json({ closed: await closeNow() });
+    } else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
       const p = (await pref.get()).val(); if (!p) return res.status(404).json({ error: 'not found' });
       await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
     } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null });
