@@ -1,395 +1,121 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TERMINAL 9 - Game</title>
-    <link rel="icon" type="image/jpeg" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
-    
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap" rel="stylesheet">
-
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            background-color: #000000;
-            color: #ffffff;
-            font-family: 'Montserrat', sans-serif;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .hidden {
-            display: none !important;
-        }
-
-        #login-screen {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
-            max-width: 500px;
-            padding: 20px;
-            z-index: 10;
-        }
-
-        .logo-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 40px;
-        }
-
-        .logo-img {
-            width: 32px;
-            height: 32px;
-            object-fit: cover;
-            border-radius: 4px;
-        }
-
-        .brand-title {
-            font-weight: 900;
-            font-size: 1.6rem;
-            letter-spacing: 2px;
-        }
-
-        .login-label {
-            font-weight: 900;
-            font-size: 1.2rem;
-            letter-spacing: 2px;
-            margin-bottom: 25px;
-        }
-
-        .input-group {
-            width: 100%;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .input-box {
-            width: 100%;
-            background: transparent;
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            border-radius: 14px;
-            padding: 16px 20px;
-            color: #ffffff;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 1.1rem;
-            text-align: center;
-            outline: none;
-            transition: border-color 0.3s;
-        }
-
-        .input-box:focus {
-            border-color: #ffffff;
-        }
-
-        .error-msg {
-            color: #ff0055;
-            font-size: 0.85rem;
-            font-weight: 700;
-            margin-top: 12px;
-            letter-spacing: 0.5px;
-            min-height: 20px;
-            text-align: center;
-        }
-
-        #game-screen {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            background-color: #888888;
-            transition: background-color 0.3s ease;
-        }
-
-        #game-screen.game-active {
-            background-color: #ffffff;
-        }
-
-        .pre-game-text {
-            color: #ffffff;
-            font-size: 1rem;
-            font-weight: 700;
-            letter-spacing: 1px;
-            margin-bottom: 40px;
-            text-transform: uppercase;
-        }
-
-        .game-timer-display {
-            font-size: 5rem;
-            font-weight: 900;
-            color: #00ffaa;
-            text-shadow: 0 0 20px rgba(0, 255, 170, 0.6);
-            margin-bottom: 30px;
-        }
-
-        .ready-btn {
-            background: #ffffff;
-            border: 2px solid #e0c870;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
-            padding: 12px 35px;
-            border-radius: 12px;
-            font-family: 'Montserrat', sans-serif;
-            font-size: 1.2rem;
-            font-weight: 700;
-            color: #000000;
-            cursor: pointer;
-            z-index: 5;
-        }
-
-        .red-trigger-btn {
-            width: 75px;
-            height: 75px;
-            background-color: #aa0000;
-            border: 2px solid #000000;
-            border-radius: 50%;
-            cursor: pointer;
-            outline: none;
-            box-shadow: 0 0 10px rgba(0,0,0,0.3);
-        }
-
-        .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(8px);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-        }
-
-        .overlay-card {
-            width: 90%;
-            max-width: 800px;
-            background: rgba(10, 10, 12, 0.95);
-            padding: 60px 30px;
-            border-radius: 14px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            text-align: center;
-        }
-
-        .eliminated-card {
-            border: 2px solid #cc0000;
-            box-shadow: 0 0 30px rgba(204, 0, 0, 0.3);
-        }
-
-        .eliminated-title {
-            color: #cc0000;
-            font-size: 3.5rem;
-            font-weight: 900;
-            letter-spacing: 3px;
-            margin-bottom: 15px;
-            text-shadow: 0 0 20px rgba(204, 0, 0, 0.6);
-        }
-
-        .eliminated-subtext {
-            color: #ffffff;
-            font-size: 1.2rem;
-            margin-bottom: 50px;
-        }
-
-        .passed-card {
-            border: 2px solid #00cc44;
-            box-shadow: 0 0 30px rgba(0, 204, 68, 0.3);
-        }
-
-        .passed-title {
-            color: #00cc44;
-            font-size: 3.5rem;
-            font-weight: 900;
-            letter-spacing: 3px;
-            margin-bottom: 15px;
-            text-shadow: 0 0 20px rgba(0, 204, 68, 0.6);
-        }
-
-        .passed-subtext {
-            color: #ffffff;
-            font-size: 1.2rem;
-            margin-bottom: 50px;
-        }
-
-        .overlay-footer {
-            color: #777777;
-            font-size: 0.9rem;
-            font-style: italic;
-        }
-    </style>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal 9</title>
+<link rel="icon" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --cyan:#00f3ff; --red:#ff0055; --green:#39ff14; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { background:radial-gradient(ellipse at top,#14141a 0%,#0a0a0c 60%); color:#fff; font-family:'Montserrat',sans-serif; }
+  .screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; }
+  .screen.on { display:flex; animation:in .6s ease both; }
+  .brand { display:flex; gap:10px; align-items:center; font-weight:700; font-size:18px; position:absolute; top:34px; }
+  .brand img { width:28px; height:28px; }
+  /* login */
+  h2 { font-size:14px; margin:0 0 14px; }
+  input { width:min(420px,86vw); padding:12px 16px; font:600 16px 'Montserrat',sans-serif; text-align:center; color:#fff; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:2px solid rgba(255,255,255,.4); border-radius:10px; outline:none; }
+  input:focus-visible { border-color:var(--cyan); box-shadow:0 0 14px rgba(0,243,255,.4); }
+  #err { color:var(--red); font-size:13px; min-height:20px; margin-top:12px; }
+  /* game */
+  #game { background:#fff; color:#111; }
+  #clock { font:700 44px 'Montserrat',sans-serif; color:#2ff5d0; text-shadow:0 0 14px #2ff5d0; font-variant-numeric:tabular-nums; margin-bottom:18px; }
+  #btn { width:56px; height:56px; border-radius:50%; background:#b00000; border:2px solid #333; cursor:pointer; }
+  #btn:active { transform:scale(.94); }
+  #ready { position:absolute; inset:0; background:rgba(128,128,128,.92); backdrop-filter:blur(8px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; color:#fff; font-size:13px; }
+  #ready button { padding:14px 40px; font:700 15px 'Montserrat',sans-serif; background:#fff; border:3px solid #f5e6a0; border-radius:14px; cursor:pointer; }
+  /* overlays */
+  .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
+  .ov.on { display:block; animation:in .7s ease both; }
+  .ov .box { height:100%; border:3px solid; border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; position:relative; }
+  .ov h1 { margin:0; font-size:clamp(36px,9vw,56px); }
+  .ov p { margin:8px 0 0; font-size:15px; }
+  .ov small { position:absolute; bottom:16px; font-size:12px; }
+  .ov .brand { top:20px; }
+  #pass .box { border-color:var(--green); box-shadow:0 0 22px rgba(57,255,20,.5), inset 0 0 22px rgba(57,255,20,.2); }
+  #pass h1 { color:var(--green); text-shadow:0 0 18px var(--green); }
+  #elim .box { border-color:var(--red); box-shadow:0 0 22px rgba(255,0,85,.5), inset 0 0 22px rgba(255,0,85,.2); }
+  #elim h1 { color:var(--red); text-shadow:0 0 18px var(--red); }
+  @keyframes in { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion:reduce) { .screen.on,.ov.on { animation:none; } }
+</style>
 </head>
 <body>
 
-    <div id="login-screen">
-        <div class="logo-header">
-            <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
-            <span class="brand-title">TERMINAL 9</span>
-        </div>
-        <h2 class="login-label">LOGIN</h2>
-        <div class="input-group">
-            <input type="text" id="player-id-input" class="input-box" placeholder="Unique ID here" autocomplete="off">
-            <div id="error-message" class="error-msg"></div>
-        </div>
-    </div>
+<section id="login" class="screen on">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h2>LOGIN</h2>
+  <input id="uid" placeholder="Unique ID here" autocomplete="off" autocapitalize="characters" spellcheck="false">
+  <div id="err" role="alert"></div>
+</section>
 
-    <div id="game-screen" class="hidden">
-        <div id="pre-game-header" class="pre-game-text">BEFORE STARTING READ THE INSTRUCTIONS</div>
-        
-        <div id="timer-display" class="game-timer-display">60.00</div>
-        
-        <button id="ready-btn" class="ready-btn">Ready!</button>
-        <button id="trigger-btn" class="red-trigger-btn hidden"></button>
-    </div>
+<section id="game" class="screen">
+  <div id="clock">60.00</div>
+  <button id="btn" aria-label="Press"></button>
+  <div id="ready"><span>BEFORE STARTING READ THE INSTRUCTIONS</span><button id="go">Ready!</button></div>
+</section>
 
-    <div id="fail-overlay" class="overlay hidden">
-        <div class="overlay-card eliminated-card">
-            <div class="logo-header">
-                <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
-                <span class="brand-title">TERMINAL 9</span>
-            </div>
-            <h1 class="eliminated-title">ELIMINATED</h1>
-            <p id="eliminated-day-text" class="eliminated-subtext">You made it until DAY 1</p>
-            <p class="overlay-footer">*You can not longer Login, Thank you for participating!</p>
-        </div>
-    </div>
+<div id="pass" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>PASSED</h1><p>Check Discord or the instructions for the next game</p>
+  <small>*Remember to login back tomorrow!</small>
+</div></div>
 
-    <div id="pass-overlay" class="overlay hidden">
-        <div class="overlay-card passed-card">
-            <div class="logo-header">
-                <img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt="Logo" class="logo-img">
-                <span class="brand-title">TERMINAL 9</span>
-            </div>
-            <h1 class="passed-title">PASSED</h1>
-            <p class="passed-subtext">Check Discord or the instructions for the next game</p>
-            <p class="overlay-footer">*Remember to login back tomorrow!</p>
-        </div>
-    </div>
+<div id="elim" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>ELIMINATED</h1><p id="elimDay">You made it until DAY x</p>
+  <small>*You can not longer Login, Thank you for participating!</small>
+</div></div>
 
-    <script>
-        const FIREBASE_DB_URL = "https://project-4162381477655572279-default-rtdb.firebaseio.com/players";
+<script>
+// ===== CONFIG: your Firebase Realtime Database URL (no trailing slash) =====
+const DB = "https://project-4162381477655572279-default-rtdb.firebaseio.com/";
+// ==========================================================================
+const $ = id => document.getElementById(id);
+const api = (path, method='GET', body) =>
+  fetch(`${DB}/${path}.json`, { method, body: body && JSON.stringify(body) }).then(r => r.json());
+let uid, player, day;
 
-        let activePlayerId = null;
-        let gameActive = false;
-        let timerVal = 60.00;
-        let gameInterval = null;
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('on')); $(id).classList.add('on'); }
 
-        document.getElementById('player-id-input').addEventListener('keypress', function (e) {
-            if (e.key === 'Enter') {
-                processLogin(this.value.trim());
-            }
-        });
+$('uid').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  uid = e.target.value.trim().toUpperCase();
+  $('err').textContent = '';
+  if (!/^T9-[A-Z0-9-]+$/.test(uid)) return $('err').textContent = 'Invalid ID. Check it and try again.';
+  try {
+    player = await api('players/' + uid);
+    if (!player) return $('err').textContent = 'ID not found. Check it and try again.';
+    day = (await api('config/active_day')) || 1;
+    if (player.status === 'eliminated') return eliminated(player.eliminated_day || player.current_day);
+    if (player.current_day > day) return $('pass').classList.add('on');
+    startDay();
+  } catch { $('err').textContent = 'Connection error. Try again.'; }
+});
 
-        async function processLogin(inputId) {
-            const errorDiv = document.getElementById('error-message');
-            errorDiv.textContent = "";
+function eliminated(d) { $('elimDay').textContent = 'You made it until DAY ' + d; $('elim').classList.add('on'); }
 
-            if (!inputId.startsWith("T9-") || inputId.length < 7) {
-                errorDiv.textContent = "Invalid ID format. Must start with T9-";
-                return;
-            }
+function startDay() { show('game'); } // Day 1 only; add other days via a switch on `day`
 
-            activePlayerId = inputId;
-            let playerData = null;
 
-            try {
-                const response = await fetch(`${FIREBASE_DB_URL}/${inputId}.json`);
-                playerData = await response.json();
-            } catch (err) {
-                errorDiv.textContent = "Connection error. Try again.";
-                return;
-            }
-
-            if (!playerData) {
-                errorDiv.textContent = "ID not found in database.";
-                return;
-            }
-
-            if (playerData.status === "eliminated") {
-                document.getElementById('login-screen').classList.add('hidden');
-                document.getElementById('game-screen').classList.remove('hidden');
-                document.getElementById('eliminated-day-text').textContent = `You made it until DAY ${playerData.current_day}`;
-                document.getElementById('fail-overlay').classList.remove('hidden');
-                return;
-            }
-
-            document.getElementById('login-screen').classList.add('hidden');
-            document.getElementById('game-screen').classList.remove('hidden');
-        }
-
-        document.getElementById('ready-btn').addEventListener('click', function() {
-            this.classList.add('hidden');
-            document.getElementById('pre-game-header').classList.add('hidden');
-            document.getElementById('trigger-btn').classList.remove('hidden');
-            document.getElementById('game-screen').classList.add('game-active');
-            
-            startCountdown();
-        });
-
-        function startCountdown() {
-            gameActive = true;
-            timerVal = 60.00;
-            
-            gameInterval = setInterval(() => {
-                timerVal -= 0.05;
-                if (timerVal <= 0) {
-                    timerVal = 0.00;
-                    clearInterval(gameInterval);
-                    if (gameActive) handleFail();
-                }
-                document.getElementById('timer-display').textContent = timerVal.toFixed(2);
-            }, 50);
-        }
-
-        document.getElementById('trigger-btn').addEventListener('click', function() {
-            if (!gameActive) return;
-            gameActive = false;
-            clearInterval(gameInterval);
-
-            if (timerVal >= 7.00 && timerVal <= 7.99) {
-                handlePass();
-            } else {
-                handleFail();
-            }
-        });
-
-        async function handlePass() {
-            const data = { status: "active", current_day: 2 };
-            await savePlayerData(activePlayerId, data);
-            document.getElementById('pass-overlay').classList.remove('hidden');
-        }
-
-        async function handleFail() {
-            const data = { status: "eliminated", current_day: 1 };
-            await savePlayerData(activePlayerId, data);
-            document.getElementById('fail-overlay').classList.remove('hidden');
-        }
-
-        async function savePlayerData(id, data) {
-            try {
-                await fetch(`${FIREBASE_DB_URL}/${id}.json`, {
-                    method: 'PATCH',
-                    body: JSON.stringify(data)
-                });
-            } catch (err) {}
-        }
-    </script>
+let t0, raf, over = false;
+$('go').onclick = () => { $('ready').style.display = 'none'; t0 = performance.now(); over = false; loop(); };
+function left() { return Math.max(0, 60 - (performance.now() - t0) / 1000); }
+function loop() {
+  const l = left();
+  $('clock').textContent = l.toFixed(2).padStart(5, '0');
+  if (l <= 0) return finish(false);
+  raf = requestAnimationFrame(loop);
+}
+$('btn').onclick = () => { if (!t0 || over) return; finish(left() >= 7 && left() < 8); };
+async function finish(ok) {
+  if (over) return; over = true; cancelAnimationFrame(raf);
+  if (ok) { $('pass').classList.add('on'); await api('players/' + uid, 'PATCH', { current_day: day + 1 }); }
+  else { eliminated(day); await api('players/' + uid, 'PATCH', { status: 'eliminated', eliminated_day: day }); }
+}
+</script>
 </body>
 </html>
