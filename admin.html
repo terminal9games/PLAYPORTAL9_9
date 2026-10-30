@@ -42,9 +42,13 @@
     <h1>Active game</h1>
     <div class="row">
       <select id="day"></select>
+      <input id="mins" type="number" min="1" value="1" style="width:90px;margin:0" aria-label="Minutes"> min
       <button id="saveDay">Save active day</button>
+      <button id="closeBtn">Close day now</button>
       <button id="pairBtn">Create random pairs</button>
       <span id="dayMsg"></span>
+    </div>
+    <div style="margin-top:10px;font-size:13px" id="dayInfo">
     </div>
   </div>
   <div class="card">
@@ -87,7 +91,15 @@ function logout() {
 }
 for (let i = 1; i <= 8; i++) $('day').add(new Option('Day ' + i, i));
 const flash = t => { $('dayMsg').textContent = t; setTimeout(() => $('dayMsg').textContent = '', 3000); };
-$('saveDay').onclick = async () => { await adm('setDay', { value: Number($('day').value) }); flash('Saved'); };
+// Test value is 1 minute. For the real 20 hours type 1200 in the minutes box.
+$('saveDay').onclick = async () => {
+  await adm('setDay', { value: Number($('day').value), minutes: Number($('mins').value) });
+  flash('Saved: timer restarted'); load();
+};
+$('closeBtn').onclick = async () => {
+  if (!confirm('Close the day now? Everyone who has not completed it is eliminated.')) return;
+  const r = await adm('close'); flash(r.closed ? 'Day closed' : 'Already closed'); load();
+};
 $('pairBtn').onclick = async () => {
   const d = Number($('day').value);
   if (!confirm('Create new random pairs for Day ' + d + '? This replaces existing pairs.')) return;
@@ -95,8 +107,10 @@ $('pairBtn').onclick = async () => {
 };
 let first = true;
 async function load() {
-  const { players, activeDay } = await adm('list');
+  const { players, activeDay, endsAt, closed, now } = await adm('list');
   if (first) { $('day').value = activeDay; first = false; }
+  const secs = endsAt ? Math.max(0, Math.round((endsAt - now) / 1000)) : null;
+  $('dayInfo').textContent = 'Active: Day ' + activeDay + ' - ' + (closed ? 'CLOSED' : secs === null ? 'no deadline' : 'closes in ' + Math.floor(secs / 3600) + 'h ' + Math.floor(secs % 3600 / 60) + 'm ' + secs % 60 + 's');
   const ids = Object.keys(players).sort();
   $('count').textContent = ids.length;
   $('rows').innerHTML = ids.map(id => {
