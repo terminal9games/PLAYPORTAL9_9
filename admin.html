@@ -57,6 +57,11 @@
     <div class="row"><input id="code4" maxlength="4" placeholder="4-digit code" style="width:140px;margin:0"><button id="save4">Save Day 4</button><span id="msg4"></span></div>
   </div>
   <div class="card">
+    <h1>Day 5: Simon rounds</h1>
+    <div class="row"><input id="rounds5" type="number" min="3" max="20" value="8" style="width:100px;margin:0" aria-label="Rounds"> rounds (a player passes by repeating the full sequence)<button id="save5">Save Day 5</button><span id="msg5"></span></div>
+    <div style="margin-top:8px;font-size:12px;color:#bbb">Each player gets their own random sequence, created when they first open Day 5. Set this before opening the day.</div>
+  </div>
+  <div class="card">
     <h1>Players (<span id="count">0</span>)</h1>
     <div class="tablewrap"><table>
       <thead><tr><th>ID</th><th>Status</th><th>Day</th><th>Actions</th></tr></thead>
@@ -114,10 +119,14 @@ $('save4').onclick = async () => {
   const r = await adm('setDay4', { code: $('code4').value, clues: $('clues').value.split('\n') });
   $('msg4').textContent = r.error || 'Saved'; setTimeout(() => $('msg4').textContent = '', 3000);
 };
+$('save5').onclick = async () => {
+  const r = await adm('setDay5', { rounds: Number($('rounds5').value) });
+  $('msg5').textContent = r.error || 'Saved'; setTimeout(() => $('msg5').textContent = '', 3000);
+};
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now, day4 } = await adm('list');
-  if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; first = false; }
+  const { players, activeDay, endsAt, closed, now, day4, day5len } = await adm('list');
+  if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; $('rounds5').value = day5len || 8; first = false; }
   const secs = endsAt ? Math.max(0, Math.round((endsAt - now) / 1000)) : null;
   $('dayInfo').textContent = 'Active: Day ' + activeDay + ' - ' + (closed ? 'CLOSED' : secs === null ? 'no deadline' : 'closes in ' + Math.floor(secs / 3600) + 'h ' + Math.floor(secs % 3600 / 60) + 'm ' + secs % 60 + 's');
   const ids = Object.keys(players).sort();
