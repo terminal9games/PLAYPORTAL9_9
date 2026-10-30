@@ -43,6 +43,7 @@
     <div class="row">
       <select id="day"></select>
       <button id="saveDay">Save active day</button>
+      <button id="pairBtn">Create random pairs</button>
       <span id="dayMsg"></span>
     </div>
   </div>
@@ -98,6 +99,24 @@ async function loadDay() { $('day').value = (await db('config/active_day')) || 1
 $('saveDay').onclick = async () => {
   await db('config/active_day', 'PUT', Number($('day').value));
   $('dayMsg').textContent = 'Saved'; setTimeout(() => $('dayMsg').textContent = '', 2000);
+};
+
+// ---- random pairs for the selected day ----
+$('pairBtn').onclick = async () => {
+  const d = Number($('day').value);
+  if ((await db('pairs/day' + d)) && !confirm('Pairs already exist for day ' + d + '. Overwrite them?')) return;
+  const players = (await db('players')) || {};
+  const ids = Object.keys(players).filter(i => players[i].status === 'active' && players[i].current_day === d);
+  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+  const up = {};
+  for (let i = 0; i < ids.length; i += 2) {
+    if (i + 1 >= ids.length) { up['players/' + ids[i] + '/pair'] = 'bye'; break; }
+    const pid = 'p' + Math.random().toString(36).slice(2, 10);
+    up[`pairs/day${d}/${pid}/a`] = ids[i]; up[`pairs/day${d}/${pid}/b`] = ids[i + 1];
+    up['players/' + ids[i] + '/pair'] = pid; up['players/' + ids[i + 1] + '/pair'] = pid;
+  }
+  await db('', 'PATCH', up);
+  $('dayMsg').textContent = ids.length + ' players paired'; setTimeout(() => $('dayMsg').textContent = '', 3000);
 };
 
 // ---- players ----
