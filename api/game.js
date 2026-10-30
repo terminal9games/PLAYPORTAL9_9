@@ -150,9 +150,39 @@ module.exports = async (req, res) => {
       const input = req.body.seq;
       const ok = Array.isArray(input) && input.length === level && input.every((v, i) => v === p.d5_seq[i]);
       if (!ok) await ref.update({ status: 'eliminated', eliminated_day: 5 });
-      else if (level >= p.d5_seq.length) await ref.update({ current_day: 6 });
+      else if (level >= p.d5_seq.length) await ref.update({ d5_phase: 2, d5_start: null, d5_tries: null });
       else await ref.update({ d5_level: level + 1 });
       p = await load();
+    }
+
+    // Day 5 phases 2 and 3: timed logic challenges. The question is only sent after the player
+    // presses Begin, the clock runs on the server, and answers are checked here.
+    let sec5 = {};
+    if (day === 5 && live()) {
+      sec5 = (await db.ref('secret/day5').get()).val() || {};
+      let ph = p.d5_phase || 1, cfg = sec5['p' + ph];
+      if (ph >= 2 && cfg && p.d5_start && now > p.d5_start + cfg.mins * 60000 + GRACE) {
+        await ref.update({ status: 'eliminated', eliminated_day: 5 }); p = await load();
+      }
+      ph = p.d5_phase || 1; cfg = sec5['p' + ph];
+      if (live() && ph >= 2 && cfg) {
+        if (action === 'begin5' && !p.d5_start) { await ref.update({ d5_start: now, d5_tries: 0 }); p = await load(); }
+        if (action === 'ans5' && p.d5_start && typeof req.body.answer === 'string') {
+          const tries = p.d5_tries || 0;
+          const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+          const given = norm(req.body.answer.slice(0, 100));
+          const ok = given !== '' && String(cfg.a).split('|').some(x => norm(x) === given);
+          if (tries < 3) {
+            if (ok) await ref.update(ph === 2 ? { d5_phase: 3, d5_start: null, d5_tries: null } : { current_day: 6 });
+            else {
+              wrong = true;
+              if (tries + 1 >= 3) await ref.update({ d5_tries: tries + 1, status: 'eliminated', eliminated_day: 5 });
+              else await ref.update({ d5_tries: tries + 1 });
+            }
+            p = await load();
+          }
+        }
+      }
     }
 
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
@@ -188,8 +218,15 @@ module.exports = async (req, res) => {
 
     const day5view = () => {
       if (!Array.isArray(p.d5_seq)) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
-      const level = p.d5_level || 1;
-      return { screen: 'day5', level, total: p.d5_seq.length, seq: p.d5_seq.slice(0, level) };
+      const ph = p.d5_phase || 1;
+      if (ph === 1) {
+        const level = p.d5_level || 1;
+        return { screen: 'day5', level, total: p.d5_seq.length, seq: p.d5_seq.slice(0, level) };
+      }
+      const cfg = sec5['p' + ph];
+      if (!cfg) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
+      if (!p.d5_start) return { screen: 'd5intro', phase: ph, mins: cfg.mins };
+      return { screen: 'd5q', phase: ph, q: cfg.q, endsAt: p.d5_start + cfg.mins * 60000, left: 3 - (p.d5_tries || 0), wrong, now: Date.now() };
     };
 
     let view;
