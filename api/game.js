@@ -23,6 +23,9 @@ module.exports = async (req, res) => {
     const now = Date.now();
     const live = () => p.status === 'active' && p.current_day === day;
 
+    // Admin reset the player to Day 1: clear leftovers from the previous attempt
+    if (day === 1 && live() && p.d1_done) { await ref.update({ d1_start: null, d1_done: null }); p = await load(); }
+
     // Day 1: a game that was started and never finished is a timeout
     if (day === 1 && live() && p.d1_start && !p.d1_done && now > p.d1_start + D1_MS + GRACE) {
       await ref.update({ d1_done: true, status: 'eliminated', eliminated_day: 1 });
@@ -42,7 +45,8 @@ module.exports = async (req, res) => {
     }
     if (action === 'pick' && day === 2 && live() && p.pair && p.pair !== 'bye' && (choice === 'share' || choice === 'steal')) {
       const slot = (await db.ref(`pairs/day2/${p.pair}/a`).get()).val() === uid ? 'a' : 'b';
-      await db.ref(`pairs/day2/${p.pair}/choice_${slot}`).transaction(v => (v === null ? choice : undefined));
+      const cref = db.ref(`pairs/day2/${p.pair}/choice_${slot}`);
+      if (!(await cref.get()).exists()) await cref.set(choice);
     }
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
 
@@ -55,12 +59,11 @@ module.exports = async (req, res) => {
       if (!mine) return { screen: 'pick' };
       if (!theirs) return { screen: 'wait' };
       const reveal = { mine, theirs, ok: theirs === 'share', day: 2 };
-      await ref.transaction(cur => {
-        if (!cur || cur.reveal) return;
-        cur.reveal = reveal;
-        if (reveal.ok) cur.current_day = 3; else { cur.status = 'eliminated'; cur.eliminated_day = 2; }
-        return cur;
-      });
+      if (!p.reveal) {
+        const upd = { reveal };
+        if (reveal.ok) upd.current_day = 3; else { upd.status = 'eliminated'; upd.eliminated_day = 2; }
+        await ref.update(upd);
+      }
       p = await load();
       return { screen: 'reveal', ...p.reveal };
     };
