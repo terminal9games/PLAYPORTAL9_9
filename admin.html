@@ -57,101 +57,68 @@
 </div>
 
 <script>
-// ===== CONFIG =====
-const DB = "https://project-4162381477655572279-default-rtdb.firebaseio.com";
-const API_KEY = "AIzaSyC-cKo8W1kcYbIl9-GsoSiNCiSE9hBWZDw"; // Project settings > General > Web API Key
-// ==================
 const $ = id => document.getElementById(id);
+const API_KEY = "AIzaSyC-cKo8W1kcYbIl9-GsoSiNCiSE9hBWZDw"; // public Firebase web key (identifies the project, grants no access)
 let token = null, timer;
 
-async function db(path, method='GET', body) {
-  const r = await fetch(`${DB}/${path}.json?auth=${token}`, { method, body: body !== undefined ? JSON.stringify(body) : undefined });
-  if (r.status === 401) { logout(); throw new Error('Session expired'); }
+async function adm(action, extra = {}) {
+  const r = await fetch('/api/admin', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ action, ...extra }) });
+  if (r.status === 401 || r.status === 403) { logout(); throw new Error('auth'); }
   return r.json();
 }
-
 $('loginBtn').onclick = async () => {
   $('msg').textContent = '';
   try {
     const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email:$('email').value.trim(), password:$('pass').value, returnSecureToken:true })
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: $('email').value.trim(), password: $('pass').value, returnSecureToken: true })
     });
     const d = await r.json();
     if (!d.idToken) return $('msg').textContent = 'Wrong email or password.';
-    token = d.idToken;
+    token = d.idToken; $('pass').value = '';
     $('loginCard').classList.add('hide'); $('panel').classList.remove('hide');
-    $('pass').value = '';
-    await loadDay(); await load();
-    timer = setInterval(load, 5000);
+    await load(); timer = setInterval(load, 5000);
   } catch { $('msg').textContent = 'Connection error. Try again.'; }
 };
-
 function logout() {
   token = null; clearInterval(timer);
   $('panel').classList.add('hide'); $('loginCard').classList.remove('hide');
   $('msg').textContent = 'Session expired. Sign in again.';
 }
-
-// ---- active day ----
 for (let i = 1; i <= 8; i++) $('day').add(new Option('Day ' + i, i));
-async function loadDay() { $('day').value = (await db('config/active_day')) || 1; }
-$('saveDay').onclick = async () => {
-  await db('config/active_day', 'PUT', Number($('day').value));
-  $('dayMsg').textContent = 'Saved'; setTimeout(() => $('dayMsg').textContent = '', 2000);
-};
-
-// ---- random pairs for the selected day ----
+const flash = t => { $('dayMsg').textContent = t; setTimeout(() => $('dayMsg').textContent = '', 3000); };
+$('saveDay').onclick = async () => { await adm('setDay', { value: Number($('day').value) }); flash('Saved'); };
 $('pairBtn').onclick = async () => {
   const d = Number($('day').value);
-  if ((await db('pairs/day' + d)) && !confirm('Pairs already exist for day ' + d + '. Overwrite them?')) return;
-  const players = (await db('players')) || {};
-  const ids = Object.keys(players).filter(i => players[i].status === 'active' && players[i].current_day === d);
-  for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
-  const up = {};
-  for (let i = 0; i < ids.length; i += 2) {
-    if (i + 1 >= ids.length) { up['players/' + ids[i] + '/pair'] = 'bye'; break; }
-    const pid = 'p' + Math.random().toString(36).slice(2, 10);
-    up[`pairs/day${d}/${pid}/a`] = ids[i]; up[`pairs/day${d}/${pid}/b`] = ids[i + 1];
-    up['players/' + ids[i] + '/pair'] = pid; up['players/' + ids[i + 1] + '/pair'] = pid;
-  }
-  await db('', 'PATCH', up);
-  $('dayMsg').textContent = ids.length + ' players paired'; setTimeout(() => $('dayMsg').textContent = '', 3000);
+  if (!confirm('Create new random pairs for Day ' + d + '? This replaces existing pairs.')) return;
+  const r = await adm('pair', { value: d }); flash(r.paired + ' players paired'); load();
 };
-
-// ---- players ----
+let first = true;
 async function load() {
-  const players = (await db('players')) || {};
+  const { players, activeDay } = await adm('list');
+  if (first) { $('day').value = activeDay; first = false; }
   const ids = Object.keys(players).sort();
   $('count').textContent = ids.length;
   $('rows').innerHTML = ids.map(id => {
     const p = players[id];
-    return `<tr>
-      <td>${esc(id)}</td>
-      <td class="${esc(p.status)}">${esc(p.status)}</td>
-      <td>${esc(p.current_day)}</td>
-      <td>
-        <button data-a="active" data-id="${esc(id)}">Revive</button>
-        <button data-a="eliminated" data-id="${esc(id)}">Eliminate</button>
-        <button data-a="winner" data-id="${esc(id)}">Winner</button>
-        <button data-a="day" data-id="${esc(id)}">Set day</button>
-      </td></tr>`;
+    return `<tr><td>${esc(id)}</td><td class="${esc(p.status)}">${esc(p.status)}</td><td>${esc(p.current_day)}</td><td>
+      <button data-a="active" data-id="${esc(id)}">Revive</button>
+      <button data-a="eliminated" data-id="${esc(id)}">Eliminate</button>
+      <button data-a="winner" data-id="${esc(id)}">Winner</button>
+      <button data-a="day" data-id="${esc(id)}">Set day</button></td></tr>`;
   }).join('');
 }
-const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 $('rows').onclick = async e => {
   const b = e.target.closest('button'); if (!b) return;
   const id = b.dataset.id, a = b.dataset.a;
   if (a === 'day') {
     const d = Number(prompt('New day for ' + id + ' (1-8):'));
     if (!(d >= 1 && d <= 8)) return;
-    await db('players/' + id, 'PATCH', { current_day: d });
-  } else if (a === 'active') {
-    await db('players/' + id, 'PATCH', { status: 'active', eliminated_day: null });
+    await adm('playerDay', { id, value: d });
   } else {
     if (a === 'eliminated' && !confirm('Eliminate ' + id + '?')) return;
-    await db('players/' + id, 'PATCH', { status: a });
+    await adm('status', { id, value: a });
   }
   load();
 };
