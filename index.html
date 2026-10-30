@@ -109,98 +109,87 @@
 </div></div>
 
 <script>
-// ===== CONFIG: your Firebase Realtime Database URL (no trailing slash) =====
-const DB = "https://project-4162381477655572279-default-rtdb.firebaseio.com";
-// ==========================================================================
 const $ = id => document.getElementById(id);
-const api = (path, method='GET', body) =>
-  fetch(`${DB}/${path}.json`, { method, body: body && JSON.stringify(body) }).then(r => r.json());
-let uid, player, day;
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let token, startLocal, raf, over = false, pick, pollT;
 
+async function call(action, extra = {}) {
+  const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token, ...extra }) });
+  const d = await r.json();
+  if (!r.ok) throw d;
+  return d;
+}
 function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('on')); $(id).classList.add('on'); }
+function d2view(id) { document.querySelectorAll('.d2v').forEach(v => v.classList.toggle('on', v.id === id)); }
+function eliminated(d) { $('elimDay').textContent = 'You made it until DAY ' + d; $('elim').classList.add('on'); }
 
 $('uid').addEventListener('keydown', async e => {
   if (e.key !== 'Enter') return;
-  uid = e.target.value.trim().toUpperCase();
   $('err').textContent = '';
-  if (!/^T9-[A-Z0-9-]+$/.test(uid)) return $('err').textContent = 'Invalid ID. Check it and try again.';
-  try {
-    player = await api('players/' + uid);
-    if (!player) return $('err').textContent = 'ID not found. Check it and try again.';
-    day = (await api('config/active_day')) || 1;
-    if (player.status === 'eliminated') return eliminated(player.eliminated_day || player.current_day);
-    if (player.current_day > day) return $('pass').classList.add('on');
-    startDay();
-  } catch { $('err').textContent = 'Connection error. Try again.'; }
+  try { const d = await call('login', { uid: e.target.value }); token = d.token; route(d.view); }
+  catch (x) { $('err').textContent = x.error || 'Connection error. Try again.'; }
 });
 
-function eliminated(d) { $('elimDay').textContent = 'You made it until DAY ' + d; $('elim').classList.add('on'); }
-
-function startDay() { if (day === 2) day2(); else show('game'); } // add other days here
-
-// ---- Day 1: press between 07.00 and 07.99 ----
-let t0, raf, over = false;
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-$('go').onclick = async () => {
-  $('ready').style.display = 'none';
-  for (const w of ['Ready?', 'Start']) {   // 2 seconds total
-    $('cd').textContent = w; $('cd').classList.add('show');
-    await sleep(800); $('cd').classList.remove('show'); await sleep(200);
+function route(v) {
+  clearTimeout(pollT);
+  if (v.screen === 'eliminated') return eliminated(v.day);
+  if (v.screen === 'passed') return $('pass').classList.add('on');
+  if (v.screen === 'reveal') return reveal(v);
+  if (v.screen === 'day1') {
+    show('game');
+    if (v.startAt) { $('ready').style.display = 'none'; runTimer(v.startAt, v.now); }
+    return;
   }
-  t0 = performance.now(); over = false; loop();
-};
-function left() { return Math.max(0, 60 - (performance.now() - t0) / 1000); }
+  if (v.screen === 'pick') { show('d2'); return d2view('d2pick'); }
+  if (v.screen === 'wait') {
+    show('d2'); d2view('d2wait');
+    pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { route({ screen: 'wait' }); } }, 5000);
+    return;
+  }
+  show('login'); $('err').textContent = v.msg || 'Game not available yet.';
+}
+
+// ---- Day 1 ----
+function left() { return Math.max(0, 60 - Math.max(0, Date.now() - startLocal) / 1000); }
+function runTimer(startAt, serverNow) { startLocal = startAt - (serverNow - Date.now()); over = false; loop(); }
 function loop() {
   const l = left();
   $('clock').textContent = l.toFixed(2).padStart(5, '0');
-  if (l <= 0) return finish(false);
+  if (l <= 0) return press();
   raf = requestAnimationFrame(loop);
 }
-$('btn').onclick = () => { if (!t0 || over) return; finish(left() >= 7 && left() < 8); };
-async function finish(ok) {
+$('go').onclick = async () => {
+  $('go').disabled = true;
+  try {
+    const d = await call('ready');
+    $('ready').style.display = 'none';
+    runTimer(d.view.startAt, d.now);
+    for (const w of ['Ready?', 'Start']) {   // 2 seconds total
+      $('cd').textContent = w; $('cd').classList.add('show');
+      await sleep(800); $('cd').classList.remove('show'); await sleep(200);
+    }
+  } catch (x) { $('go').disabled = false; }
+};
+$('btn').onclick = () => { if (startLocal && Date.now() >= startLocal && !over) press(); };
+async function press() {
   if (over) return; over = true; cancelAnimationFrame(raf);
-  if (ok) { $('pass').classList.add('on'); await api('players/' + uid, 'PATCH', { current_day: day + 1 }); }
-  else { eliminated(day); await api('players/' + uid, 'PATCH', { status: 'eliminated', eliminated_day: day }); }
+  try { route((await call('press')).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
 }
 
-// ---- Day 2: Share or Steal (pairs are created from admin.html) ----
-let pick;
-function d2view(id) { document.querySelectorAll('.d2v').forEach(v => v.classList.toggle('on', v.id === id)); }
-document.querySelectorAll('.opt').forEach(b => b.onclick = () => {
-  pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock');
-});
+// ---- Day 2 ----
+document.querySelectorAll('.opt').forEach(b => b.onclick = () => { pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock'); });
 $('backBtn').onclick = () => d2view('d2pick');
-async function day2() {
-  const pid = player.pair;
-  if (!pid) { show('login'); return $('err').textContent = 'Rivals not assigned yet. Come back later.'; }
-  if (pid === 'bye') return finish(true); // odd player count: free pass
-  const path = 'pairs/day2/' + pid;
-  const p = (await api(path)) || {};
-  const slot = p.a === uid ? 'a' : 'b', other = slot === 'a' ? 'b' : 'a';
-  show('d2');
-  $('lockBtn').onclick = async () => {
-    d2view('d2wait');
-    await api(path + '/choice_' + slot, 'PUT', pick);
-    waitRival(path, slot, other);
-  };
-  if (p['choice_' + slot]) return waitRival(path, slot, other); // already locked earlier
-  d2view('d2pick');
-}
-async function waitRival(path, slot, other) {
-  d2view('d2wait');
-  let p;
-  while (!((p = await api(path)) && p['choice_' + other] && p['choice_' + slot])) await sleep(5000);
-  reveal(p['choice_' + slot], p['choice_' + other]);
-}
-async function reveal(mine, theirs) {
-  d2view('d2rev');
-  $('r1').textContent = 'You chose ' + mine.toUpperCase();
+$('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view('d2pick'); } };
+async function reveal(v) {
+  show('d2'); d2view('d2rev');
+  $('r1').textContent = 'You chose ' + v.mine.toUpperCase(); $('r2').textContent = '';
   await sleep(2000);
   $('r2').innerHTML = 'Your rival chose<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
   await sleep(3000);
-  $('r2').textContent = 'Your rival chose ' + theirs.toUpperCase();
+  $('r2').textContent = 'Your rival chose ' + v.theirs.toUpperCase();
   await sleep(2500);
-  finish(theirs === 'share'); // you pass only if your rival shared
+  try { await call('ack'); } catch {}
+  if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
 }
 </script>
 </body>
