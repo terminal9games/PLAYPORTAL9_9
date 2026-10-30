@@ -52,6 +52,11 @@
     </div>
   </div>
   <div class="card">
+    <h1>Day 4: clues and code</h1>
+    <textarea id="clues" rows="5" placeholder="One clue per line" style="width:100%;margin-bottom:10px;font:600 13px 'Montserrat',sans-serif;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:9px 12px"></textarea>
+    <div class="row"><input id="code4" maxlength="4" placeholder="4-digit code" style="width:140px;margin:0"><button id="save4">Save Day 4</button><span id="msg4"></span></div>
+  </div>
+  <div class="card">
     <h1>Players (<span id="count">0</span>)</h1>
     <div class="tablewrap"><table>
       <thead><tr><th>ID</th><th>Status</th><th>Day</th><th>Actions</th></tr></thead>
@@ -105,10 +110,14 @@ $('pairBtn').onclick = async () => {
   if (!confirm('Create new random pairs for Day ' + d + '? This replaces existing pairs.')) return;
   const r = await adm('pair', { value: d }); flash(r.paired + ' players paired'); load();
 };
+$('save4').onclick = async () => {
+  const r = await adm('setDay4', { code: $('code4').value, clues: $('clues').value.split('\n') });
+  $('msg4').textContent = r.error || 'Saved'; setTimeout(() => $('msg4').textContent = '', 3000);
+};
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now } = await adm('list');
-  if (first) { $('day').value = activeDay; first = false; }
+  const { players, activeDay, endsAt, closed, now, day4 } = await adm('list');
+  if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; first = false; }
   const secs = endsAt ? Math.max(0, Math.round((endsAt - now) / 1000)) : null;
   $('dayInfo').textContent = 'Active: Day ' + activeDay + ' - ' + (closed ? 'CLOSED' : secs === null ? 'no deadline' : 'closes in ' + Math.floor(secs / 3600) + 'h ' + Math.floor(secs % 3600 / 60) + 'm ' + secs % 60 + 's');
   const ids = Object.keys(players).sort();
