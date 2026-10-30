@@ -15,7 +15,7 @@ module.exports = async (req, res) => {
       const pl = await db.ref('players').get();
       const d4 = (await db.ref('secret/day4').get()).val();
       const d5len = (await db.ref('config/day5_len').get()).val();
-      return res.json({ players: pl.val() || {}, day4: d4, day5len: d5len || 8, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      return res.json({ players: pl.val() || {}, day4: d4, day5len: d5len || 8, day5: (await db.ref('secret/day5').get()).val() || {}, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
@@ -25,8 +25,8 @@ module.exports = async (req, res) => {
       return res.json({ closed: await closeNow() });
     } else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
       const p = (await pref.get()).val(); if (!p) return res.status(404).json({ error: 'not found' });
-      await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, d4_tries: null, d5_seq: null, d5_level: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
-    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, d5_seq: null, d5_level: null });
+      await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, d4_tries: null, d5_seq: null, d5_level: null, d5_phase: null, d5_start: null, d5_tries: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
+    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, d5_seq: null, d5_level: null, d5_phase: null, d5_start: null, d5_tries: null });
     else if (action === 'setDay4') {
       const c = String(req.body.code || '');
       if (!/^\d{4}$/.test(c)) return res.status(400).json({ error: 'code must be 4 digits' });
@@ -36,7 +36,17 @@ module.exports = async (req, res) => {
     else if (action === 'setDay5') {
       const n = Math.floor(Number(req.body.rounds));
       if (!(n >= 3 && n <= 20)) return res.status(400).json({ error: 'rounds must be 3 to 20' });
+      const out = {};
+      for (const k of ['p2', 'p3']) {
+        const x = req.body[k] || {};
+        const q = String(x.q || '').trim().slice(0, 600), a = String(x.a || '').trim().slice(0, 200), m = Math.floor(Number(x.mins));
+        if (!q && !a) continue;
+        if (!q || !a) return res.status(400).json({ error: 'Phase ' + k.slice(1) + ': question and answer are both required' });
+        if (!(m >= 1 && m <= 180)) return res.status(400).json({ error: 'Phase ' + k.slice(1) + ': minutes must be 1 to 180' });
+        out[k] = { q, a, mins: m };
+      }
       await db.ref('config/day5_len').set(n);
+      await db.ref('secret/day5').set(Object.keys(out).length ? out : null);
     }
     else if (action === 'add') {
       const k = String(id || '').toUpperCase();
