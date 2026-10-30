@@ -53,6 +53,7 @@ const clean = t => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(
 
 const ID = /^T9-[A-Z0-9-]{3,20}$/;
 const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
+const D5_DEFAULT_LEN = 8;   // rounds of Simon; the admin can change it (config/day5_len)
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
@@ -135,6 +136,25 @@ module.exports = async (req, res) => {
         p = await load();
       }
     }
+
+    // Day 5 (Simon): the full random sequence lives on the server. The browser only receives
+    // the part for the current level, and a wrong answer eliminates the player.
+    if (day === 5 && live() && !Array.isArray(p.d5_seq)) {
+      const len = Number((await db.ref('config/day5_len').get()).val()) || D5_DEFAULT_LEN;
+      const seq = Array.from({ length: len }, () => Math.floor(Math.random() * 4));
+      await ref.update({ d5_seq: seq, d5_level: 1 });
+      p = await load();
+    }
+    if (action === 'seq' && day === 5 && live() && Array.isArray(p.d5_seq)) {
+      const level = p.d5_level || 1;
+      const input = req.body.seq;
+      const ok = Array.isArray(input) && input.length === level && input.every((v, i) => v === p.d5_seq[i]);
+      if (!ok) await ref.update({ status: 'eliminated', eliminated_day: 5 });
+      else if (level >= p.d5_seq.length) await ref.update({ current_day: 6 });
+      else await ref.update({ d5_level: level + 1 });
+      p = await load();
+    }
+
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
 
     const day2view = async () => {
@@ -166,6 +186,12 @@ module.exports = async (req, res) => {
       return { screen: 'day4', clues: sec.clues || [], left: 3 - (p.d4_tries || 0), wrong };
     };
 
+    const day5view = () => {
+      if (!Array.isArray(p.d5_seq)) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
+      const level = p.d5_level || 1;
+      return { screen: 'day5', level, total: p.d5_seq.length, seq: p.d5_seq.slice(0, level) };
+    };
+
     let view;
     if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
@@ -175,6 +201,7 @@ module.exports = async (req, res) => {
     else if (day === 2) view = await day2view();
     else if (day === 3) view = await day3view();
     else if (day === 4) view = await day4view();
+    else if (day === 5) view = day5view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid) : undefined, view, now: Date.now() });
