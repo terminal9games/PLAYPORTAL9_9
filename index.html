@@ -86,6 +86,16 @@
     <p>Your choice: <b id="mine"></b></p>
     <div class="row2"><button id="lockBtn" class="gbtn">Lock</button><button id="backBtn" class="rbtn">Select another one</button></div>
   </div>
+  <div id="d3pick" class="d2v">
+    <h2>Choose a number</h2>
+    <div id="sv" style="font:700 56px 'Montserrat',sans-serif;color:var(--cyan);text-shadow:0 0 18px var(--cyan)">50</div>
+    <input id="slider" type="range" min="0" max="100" step="1" value="50" style="width:min(320px,80vw);padding:0;border:0;background:none;accent-color:#00f3ff">
+    <button id="selBtn" class="opt">Select</button>
+  </div>
+  <div id="d3wait" class="d2v">
+    <h2>Your number is locked<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p>Waiting for the day to close. Come back later to see the result.</p>
+  </div>
   <div id="d2wait" class="d2v">
     <h2>Waiting for your rival to choose one<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
     <p>You can close this page. Come back later to see the result.</p>
@@ -111,7 +121,7 @@
 <script>
 const $ = id => document.getElementById(id);
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-let token, startLocal, raf, over = false, pick, pollT;
+let token, startLocal, raf, over = false, pick, pollT, mode = 'd2';
 
 async function call(action, extra = {}) {
   const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token, ...extra }) });
@@ -140,10 +150,11 @@ function route(v) {
     if (v.startAt) { $('ready').style.display = 'none'; runTimer(v.startAt, v.now); }
     return;
   }
-  if (v.screen === 'pick') { show('d2'); return d2view('d2pick'); }
-  if (v.screen === 'wait') {
-    show('d2'); d2view('d2wait');
-    pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { route({ screen: 'wait' }); } }, 5000);
+  if (v.screen === 'pick') { mode = 'd2'; show('d2'); return d2view('d2pick'); }
+  if (v.screen === 'pick3') { mode = 'd3'; show('d2'); return d2view('d3pick'); }
+  if (v.screen === 'wait' || v.screen === 'wait3') {
+    show('d2'); d2view(v.screen === 'wait3' ? 'd3wait' : 'd2wait');
+    pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { route(v); } }, v.screen === 'wait3' ? 10000 : 5000);
     return;
   }
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
@@ -177,16 +188,26 @@ async function press() {
 }
 
 // ---- Day 2 ----
-document.querySelectorAll('.opt').forEach(b => b.onclick = () => { pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock'); });
-$('backBtn').onclick = () => d2view('d2pick');
-$('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view('d2pick'); } };
+document.querySelectorAll('.opt[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock'); });
+$('backBtn').onclick = () => d2view(mode === 'd3' ? 'd3pick' : 'd2pick');
+$('slider').oninput = () => { $('sv').textContent = $('slider').value; };
+$('selBtn').onclick = () => { pick = Number($('slider').value); $('mine').textContent = pick; d2view('d2lock'); };
+$('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view(mode === 'd3' ? 'd3pick' : 'd2pick'); } };
 async function reveal(v) {
   show('d2'); d2view('d2rev');
-  $('r1').textContent = 'You chose ' + v.mine.toUpperCase(); $('r2').textContent = '';
+  $('r1').textContent = 'You chose ' + String(v.mine).toUpperCase(); $('r2').textContent = '';
   await sleep(2000);
-  $('r2').innerHTML = 'Your rival chose<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
-  await sleep(3000);
-  $('r2').textContent = 'Your rival chose ' + v.theirs.toUpperCase();
+  if (v.day === 3) {
+    $('r2').innerHTML = 'The target (average x 0.8) is<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
+    await sleep(3000);
+    $('r2').textContent = 'The target (average x 0.8) is ' + v.target;
+  } else if (v.theirs == null) {
+    $('r2').textContent = 'Your rival did not choose in time';
+  } else {
+    $('r2').innerHTML = 'Your rival chose<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
+    await sleep(3000);
+    $('r2').textContent = 'Your rival chose ' + v.theirs.toUpperCase();
+  }
   await sleep(2500);
   try { await call('ack'); } catch {}
   if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
