@@ -77,6 +77,14 @@
   .pad[data-i="2"] { border-color:var(--green); --c:#39ff14; }
   .pad[data-i="3"] { border-color:#ffd400; --c:#ffd400; }
   .pad.lit { background:var(--c); box-shadow:0 0 34px var(--c); }
+  /* day 5: timed phases */
+  #d5q .qbox { width:min(560px,92vw); padding:22px; border:2px solid rgba(255,255,255,.35); border-radius:14px; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); }
+  #d5q h2 { font-size:20px; margin:0 0 10px; }
+  #d5q p { margin:0 0 16px; font-size:15px; line-height:1.6; white-space:pre-wrap; }
+  #d5qTimer { font:700 40px 'Montserrat',sans-serif; color:var(--red); text-shadow:0 0 14px rgba(255,0,85,.6); font-variant-numeric:tabular-nums; margin-bottom:14px; }
+  #d5qIntro,#d5qBody { display:none; flex-direction:column; align-items:center; }
+  #d5qIntro.on,#d5qBody.on { display:flex; }
+  #d5qErr { color:var(--red); font-size:13px; min-height:18px; margin:8px 0; }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -167,6 +175,26 @@
   </div>
 </section>
 
+<section id="d5q" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="qbox">
+    <div id="d5qIntro">
+      <h2 id="d5qIntroT"></h2>
+      <p id="d5qIntroP"></p>
+      <button id="d5qBegin" class="gbtn">Begin</button>
+    </div>
+    <div id="d5qBody">
+      <div id="d5qTimer" role="timer">00:00</div>
+      <h2 id="d5qTitle"></h2>
+      <p id="d5qText"></p>
+      <input id="d5qAns" placeholder="Your answer" autocomplete="off" maxlength="100">
+      <div id="d5qErr" role="alert"></div>
+      <button id="d5qSend" class="gbtn">Send answer</button>
+      <p id="d5qTries" style="font-size:13px;margin:10px 0 0"></p>
+    </div>
+  </div>
+</section>
+
 <div id="chat" class="chat">
   <button id="chatTab" type="button" aria-expanded="false" aria-controls="chatPanel">Chat with your rival<span id="chatDot" aria-label="New messages"></span></button>
   <div id="chatPanel">
@@ -220,7 +248,7 @@ $('uid').addEventListener('keydown', async e => {
 });
 
 function route(v) {
-  clearTimeout(pollT); d5run++;
+  clearTimeout(pollT); clearInterval(d5tick); d5run++;
   chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
   if (v.screen === 'passed') return $('pass').classList.add('on');
