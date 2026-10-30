@@ -4,7 +4,7 @@ const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
-  const { action, token, uid: rawUid, choice } = req.body || {};
+  const { action, token, uid: rawUid, choice, code } = req.body || {};
   try {
     let uid;
     if (action === 'login') {
@@ -24,6 +24,7 @@ module.exports = async (req, res) => {
     const now = Date.now();
     const live = () => p.status === 'active' && p.current_day === day && !st.closed;
 
+    let wrong = false;
     // Admin reset the player to Day 1: clear leftovers from the previous attempt
     if (day === 1 && live() && p.d1_done) { await ref.update({ d1_start: null, d1_done: null }); p = await load(); }
 
@@ -53,6 +54,17 @@ module.exports = async (req, res) => {
       const cref = db.ref('day3/choices/' + uid);
       if (!(await cref.get()).exists()) await cref.set(choice);
     }
+    if (action === 'code' && day === 4 && live() && /^\d{4}$/.test(String(code))) {
+      const sec = (await db.ref('secret/day4').get()).val();
+      const tries = p.d4_tries || 0;
+      if (sec && tries < 3) {
+        wrong = String(code) !== String(sec.code);
+        if (!wrong) await ref.update({ current_day: 5 });
+        else if (tries + 1 >= 3) await ref.update({ d4_tries: tries + 1, status: 'eliminated', eliminated_day: 4 });
+        else await ref.update({ d4_tries: tries + 1 });
+        p = await load();
+      }
+    }
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
 
     const day2view = async () => {
@@ -78,6 +90,12 @@ module.exports = async (req, res) => {
       return typeof c === 'number' ? { screen: 'wait3' } : { screen: 'pick3' };
     };
 
+    const day4view = async () => {
+      const sec = (await db.ref('secret/day4').get()).val();
+      if (!sec) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
+      return { screen: 'day4', clues: sec.clues || [], left: 3 - (p.d4_tries || 0), wrong };
+    };
+
     let view;
     if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
@@ -86,6 +104,7 @@ module.exports = async (req, res) => {
     else if (day === 1) view = { screen: 'day1', startAt: p.d1_start || null, now: Date.now() };
     else if (day === 2) view = await day2view();
     else if (day === 3) view = await day3view();
+    else if (day === 4) view = await day4view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid) : undefined, view, now: Date.now() });
