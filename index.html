@@ -27,6 +27,22 @@
   #btn:active { transform:scale(.94); }
   #ready { position:absolute; inset:0; background:rgba(128,128,128,.92); backdrop-filter:blur(8px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; color:#fff; font-size:13px; }
   #ready button { padding:14px 40px; font:700 15px 'Montserrat',sans-serif; background:#fff; border:3px solid #f5e6a0; border-radius:14px; cursor:pointer; }
+  #cd { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 54px 'Montserrat',sans-serif; color:#111; text-shadow:0 0 18px rgba(47,245,208,.8); opacity:0; transition:opacity .25s; pointer-events:none; z-index:2; }
+  #cd.show { opacity:1; }
+  /* day 2 */
+  /* day 2 */
+  #d2 { background:rgba(0,0,0,.4); }
+  .d2v { display:none; flex-direction:column; align-items:center; gap:18px; }
+  .d2v.on { display:flex; animation:in .6s ease both; }
+  .d2v h2 { font-size:22px; margin:0; }
+  .d2v p { margin:0; font-size:15px; }
+  .row2 { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .opt,.gbtn,.rbtn { padding:14px 34px; font:700 16px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.04); backdrop-filter:blur(16px); border:2px solid rgba(255,255,255,.45); border-radius:12px; cursor:pointer; }
+  .opt:hover { border-color:var(--cyan); box-shadow:0 0 14px rgba(0,243,255,.4); }
+  .gbtn { border-color:var(--green); color:var(--green); text-shadow:0 0 10px var(--green); box-shadow:0 0 16px rgba(57,255,20,.4); }
+  .rbtn { border-color:var(--red); color:var(--red); text-shadow:0 0 10px var(--red); box-shadow:0 0 16px rgba(255,0,85,.4); }
+  .dots i { font-style:normal; animation:blink 1.2s infinite; } .dots i:nth-child(2) { animation-delay:.25s; } .dots i:nth-child(3) { animation-delay:.5s; }
+  @keyframes blink { 0%,20% { opacity:0; } 40%,100% { opacity:1; } }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -55,7 +71,29 @@
 <section id="game" class="screen">
   <div id="clock">60.00</div>
   <button id="btn" aria-label="Press"></button>
+  <div id="cd"></div>
   <div id="ready"><span>BEFORE STARTING READ THE INSTRUCTIONS</span><button id="go">Ready!</button></div>
+</section>
+
+<section id="d2" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="d2pick" class="d2v on">
+    <h2>Share or Steal?</h2>
+    <div class="row2"><button class="opt" data-c="share">Share</button><button class="opt" data-c="steal">Steal</button></div>
+  </div>
+  <div id="d2lock" class="d2v">
+    <h2>Lock your option?</h2>
+    <p>Your choice: <b id="mine"></b></p>
+    <div class="row2"><button id="lockBtn" class="gbtn">Lock</button><button id="backBtn" class="rbtn">Select another one</button></div>
+  </div>
+  <div id="d2wait" class="d2v">
+    <h2>Waiting for your rival to choose one<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p>You can close this page. Come back later to see the result.</p>
+  </div>
+  <div id="d2rev" class="d2v">
+    <h2 id="r1"></h2>
+    <h2 id="r2"></h2>
+  </div>
 </section>
 
 <div id="pass" class="ov"><div class="box">
@@ -72,7 +110,7 @@
 
 <script>
 // ===== CONFIG: your Firebase Realtime Database URL (no trailing slash) =====
-const DB = "https://project-4162381477655572279-default-rtdb.firebaseio.com/";
+const DB = "https://project-4162381477655572279-default-rtdb.firebaseio.com";
 // ==========================================================================
 const $ = id => document.getElementById(id);
 const api = (path, method='GET', body) =>
@@ -98,11 +136,19 @@ $('uid').addEventListener('keydown', async e => {
 
 function eliminated(d) { $('elimDay').textContent = 'You made it until DAY ' + d; $('elim').classList.add('on'); }
 
-function startDay() { show('game'); } // Day 1 only; add other days via a switch on `day`
+function startDay() { if (day === 2) day2(); else show('game'); } // add other days here
 
-
+// ---- Day 1: press between 07.00 and 07.99 ----
 let t0, raf, over = false;
-$('go').onclick = () => { $('ready').style.display = 'none'; t0 = performance.now(); over = false; loop(); };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+$('go').onclick = async () => {
+  $('ready').style.display = 'none';
+  for (const w of ['Ready?', 'Start']) {   // 2 seconds total
+    $('cd').textContent = w; $('cd').classList.add('show');
+    await sleep(800); $('cd').classList.remove('show'); await sleep(200);
+  }
+  t0 = performance.now(); over = false; loop();
+};
 function left() { return Math.max(0, 60 - (performance.now() - t0) / 1000); }
 function loop() {
   const l = left();
@@ -115,6 +161,46 @@ async function finish(ok) {
   if (over) return; over = true; cancelAnimationFrame(raf);
   if (ok) { $('pass').classList.add('on'); await api('players/' + uid, 'PATCH', { current_day: day + 1 }); }
   else { eliminated(day); await api('players/' + uid, 'PATCH', { status: 'eliminated', eliminated_day: day }); }
+}
+
+// ---- Day 2: Share or Steal (pairs are created from admin.html) ----
+let pick;
+function d2view(id) { document.querySelectorAll('.d2v').forEach(v => v.classList.toggle('on', v.id === id)); }
+document.querySelectorAll('.opt').forEach(b => b.onclick = () => {
+  pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock');
+});
+$('backBtn').onclick = () => d2view('d2pick');
+async function day2() {
+  const pid = player.pair;
+  if (!pid) { show('login'); return $('err').textContent = 'Rivals not assigned yet. Come back later.'; }
+  if (pid === 'bye') return finish(true); // odd player count: free pass
+  const path = 'pairs/day2/' + pid;
+  const p = (await api(path)) || {};
+  const slot = p.a === uid ? 'a' : 'b', other = slot === 'a' ? 'b' : 'a';
+  show('d2');
+  $('lockBtn').onclick = async () => {
+    d2view('d2wait');
+    await api(path + '/choice_' + slot, 'PUT', pick);
+    waitRival(path, slot, other);
+  };
+  if (p['choice_' + slot]) return waitRival(path, slot, other); // already locked earlier
+  d2view('d2pick');
+}
+async function waitRival(path, slot, other) {
+  d2view('d2wait');
+  let p;
+  while (!((p = await api(path)) && p['choice_' + other] && p['choice_' + slot])) await sleep(5000);
+  reveal(p['choice_' + slot], p['choice_' + other]);
+}
+async function reveal(mine, theirs) {
+  d2view('d2rev');
+  $('r1').textContent = 'You chose ' + mine.toUpperCase();
+  await sleep(2000);
+  $('r2').innerHTML = 'Your rival chose<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
+  await sleep(3000);
+  $('r2').textContent = 'Your rival chose ' + theirs.toUpperCase();
+  await sleep(2500);
+  finish(theirs === 'share'); // you pass only if your rival shared
 }
 </script>
 </body>
