@@ -1,4 +1,5 @@
 const { db, sign, verify, maintain } = require('./_lib');
+const { censor, clean } = require('./_chat');
 const ID = /^T9-[A-Z0-9-]{3,20}$/;
 const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
 
@@ -23,6 +24,24 @@ module.exports = async (req, res) => {
     let p = await load();
     const now = Date.now();
     const live = () => p.status === 'active' && p.current_day === day && !st.closed;
+
+    // Day 2 chat: only between the two paired players, only while Day 2 is open.
+    // Messages are censored here and only the censored text is stored.
+    if (action === 'chatGet' || action === 'chatSend') {
+      if (!(day === 2 && live() && p.pair && p.pair !== 'bye' && !p.reveal)) return res.json({ open: false, messages: [] });
+      const cref = db.ref(`pairs/day2/${p.pair}/chat`);
+      const me = (await db.ref(`pairs/day2/${p.pair}/a`).get()).val() === uid ? 'a' : 'b';
+      if (action === 'chatSend') {
+        const text = clean(req.body.text);
+        if (!text) return res.status(400).json({ error: 'Write something first.' });
+        if (now - (p.chat_last || 0) < 700) return res.status(429).json({ error: 'Slow down.' });
+        await ref.update({ chat_last: now });
+        await cref.push({ s: me, t: censor(text), ts: now });
+      }
+      const messages = [];
+      (await cref.orderByKey().limitToLast(60).get()).forEach(c => { const v = c.val(); messages.push({ me: v.s === me, text: v.t }); });
+      return res.json({ open: true, messages });
+    }
 
     let wrong = false;
     // Admin reset the player to Day 1: clear leftovers from the previous attempt
