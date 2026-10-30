@@ -14,7 +14,8 @@ module.exports = async (req, res) => {
       const st = await maintain();
       const pl = await db.ref('players').get();
       const d4 = (await db.ref('secret/day4').get()).val();
-      return res.json({ players: pl.val() || {}, day4: d4, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      const d5len = (await db.ref('config/day5_len').get()).val();
+      return res.json({ players: pl.val() || {}, day4: d4, day5len: d5len || 8, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
@@ -24,13 +25,18 @@ module.exports = async (req, res) => {
       return res.json({ closed: await closeNow() });
     } else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
       const p = (await pref.get()).val(); if (!p) return res.status(404).json({ error: 'not found' });
-      await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, d4_tries: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
-    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null });
+      await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, d4_tries: null, d5_seq: null, d5_level: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
+    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, d5_seq: null, d5_level: null });
     else if (action === 'setDay4') {
       const c = String(req.body.code || '');
       if (!/^\d{4}$/.test(c)) return res.status(400).json({ error: 'code must be 4 digits' });
       const clues = (Array.isArray(req.body.clues) ? req.body.clues : []).map(x => String(x).slice(0, 200)).filter(Boolean).slice(0, 12);
       await db.ref('secret/day4').set({ code: c, clues });
+    }
+    else if (action === 'setDay5') {
+      const n = Math.floor(Number(req.body.rounds));
+      if (!(n >= 3 && n <= 20)) return res.status(400).json({ error: 'rounds must be 3 to 20' });
+      await db.ref('config/day5_len').set(n);
     }
     else if (action === 'add') {
       const k = String(id || '').toUpperCase();
