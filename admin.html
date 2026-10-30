@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Terminal 9 - Admin</title>
+<link rel="icon" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --cyan:#00f3ff; --red:#ff0055; --green:#39ff14; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; background:radial-gradient(ellipse at top,#14141a 0%,#0a0a0c 60%); color:#fff; font-family:'Montserrat',sans-serif; padding:24px 16px; }
+  .card { max-width:760px; margin:0 auto 16px; padding:18px; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.18); border-radius:14px; animation:in .5s ease both; }
+  h1 { font-size:18px; margin:0 0 14px; }
+  input,select,button { font:600 14px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.3); border-radius:8px; padding:9px 12px; }
+  button { cursor:pointer; } button:hover { border-color:var(--cyan); }
+  input { width:100%; margin-bottom:10px; }
+  .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+  .tablewrap { overflow-x:auto; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th,td { text-align:left; padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.1); white-space:nowrap; }
+  .active { color:var(--cyan); } .eliminated { color:var(--red); } .winner { color:var(--green); }
+  td button { padding:5px 9px; font-size:12px; }
+  #msg { color:var(--red); font-size:13px; min-height:18px; margin-top:6px; }
+  .hide { display:none; }
+  @keyframes in { from { opacity:0; transform:scale(.98); } to { opacity:1; transform:none; } }
+</style>
+</head>
+<body>
+
+<div id="loginCard" class="card" style="max-width:380px">
+  <h1>Admin login</h1>
+  <input id="email" type="email" placeholder="Email" autocomplete="username">
+  <input id="pass" type="password" placeholder="Password" autocomplete="current-password">
+  <button id="loginBtn">Sign in</button>
+  <div id="msg" role="alert"></div>
+</div>
+
+<div id="panel" class="hide">
+  <div class="card">
+    <h1>Active game</h1>
+    <div class="row">
+      <select id="day"></select>
+      <button id="saveDay">Save active day</button>
+      <span id="dayMsg"></span>
+    </div>
+  </div>
+  <div class="card">
+    <h1>Players (<span id="count">0</span>)</h1>
+    <div class="tablewrap"><table>
+      <thead><tr><th>ID</th><th>Status</th><th>Day</th><th>Actions</th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table></div>
+  </div>
+</div>
+
+<script>
+// ===== CONFIG =====
+const DB = "https://project-4162381477655572279-default-rtdb.firebaseio.com";
+const API_KEY = "AIzaSyC-cKo8W1kcYbIl9-GsoSiNCiSE9hBWZDw"; // Project settings > General > Web API Key
+// ==================
+const $ = id => document.getElementById(id);
+let token = null, timer;
+
+async function db(path, method='GET', body) {
+  const r = await fetch(`${DB}/${path}.json?auth=${token}`, { method, body: body !== undefined ? JSON.stringify(body) : undefined });
+  if (r.status === 401) { logout(); throw new Error('Session expired'); }
+  return r.json();
+}
+
+$('loginBtn').onclick = async () => {
+  $('msg').textContent = '';
+  try {
+    const r = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ email:$('email').value.trim(), password:$('pass').value, returnSecureToken:true })
+    });
+    const d = await r.json();
+    if (!d.idToken) return $('msg').textContent = 'Wrong email or password.';
+    token = d.idToken;
+    $('loginCard').classList.add('hide'); $('panel').classList.remove('hide');
+    $('pass').value = '';
+    await loadDay(); await load();
+    timer = setInterval(load, 5000);
+  } catch { $('msg').textContent = 'Connection error. Try again.'; }
+};
+
+function logout() {
+  token = null; clearInterval(timer);
+  $('panel').classList.add('hide'); $('loginCard').classList.remove('hide');
+  $('msg').textContent = 'Session expired. Sign in again.';
+}
+
+// ---- active day ----
+for (let i = 1; i <= 8; i++) $('day').add(new Option('Day ' + i, i));
+async function loadDay() { $('day').value = (await db('config/active_day')) || 1; }
+$('saveDay').onclick = async () => {
+  await db('config/active_day', 'PUT', Number($('day').value));
+  $('dayMsg').textContent = 'Saved'; setTimeout(() => $('dayMsg').textContent = '', 2000);
+};
+
+// ---- players ----
+async function load() {
+  const players = (await db('players')) || {};
+  const ids = Object.keys(players).sort();
+  $('count').textContent = ids.length;
+  $('rows').innerHTML = ids.map(id => {
+    const p = players[id];
+    return `<tr>
+      <td>${esc(id)}</td>
+      <td class="${esc(p.status)}">${esc(p.status)}</td>
+      <td>${esc(p.current_day)}</td>
+      <td>
+        <button data-a="active" data-id="${esc(id)}">Revive</button>
+        <button data-a="eliminated" data-id="${esc(id)}">Eliminate</button>
+        <button data-a="winner" data-id="${esc(id)}">Winner</button>
+        <button data-a="day" data-id="${esc(id)}">Set day</button>
+      </td></tr>`;
+  }).join('');
+}
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+$('rows').onclick = async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const id = b.dataset.id, a = b.dataset.a;
+  if (a === 'day') {
+    const d = Number(prompt('New day for ' + id + ' (1-8):'));
+    if (!(d >= 1 && d <= 8)) return;
+    await db('players/' + id, 'PATCH', { current_day: d });
+  } else if (a === 'active') {
+    await db('players/' + id, 'PATCH', { status: 'active', eliminated_day: null });
+  } else {
+    if (a === 'eliminated' && !confirm('Eliminate ' + id + '?')) return;
+    await db('players/' + id, 'PATCH', { status: a });
+  }
+  load();
+};
+</script>
+</body>
+</html>
