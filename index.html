@@ -308,7 +308,8 @@ $('go').onclick = async () => {
 $('btn').onclick = () => { if (startLocal && Date.now() >= startLocal && !over) press(); };
 async function press() {
   if (over) return; over = true; cancelAnimationFrame(raf);
-  try { route((await call('press')).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
+  const el = Math.round(Date.now() - startLocal);   // elapsed ms on the player's clock at the moment of the click
+  try { route((await call('press', { el })).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
 }
 
 // ---- Day 4: Echoes of Terminal 9 ----
