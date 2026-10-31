@@ -112,8 +112,13 @@ module.exports = async (req, res) => {
       p = await load();
     }
     if (action === 'press' && day === 1 && live() && p.d1_start && !p.d1_done) {
-      const left = 60 - (now - p.d1_start) / 1000;
-      await ref.update({ d1_done: true });
+      // The browser reports how many ms had passed on its own clock when the button was clicked, so
+      // network delay and server cold starts don't count against the player. The server only trusts
+      // that value if it is consistent with its own clock (at most 2.5 s earlier than the request arrived).
+      const srvEl = now - p.d1_start, el = Number(req.body.el);
+      const useEl = Number.isFinite(el) && el >= srvEl - 2500 && el <= srvEl + 300;
+      const left = 60 - (useEl ? el : srvEl) / 1000;
+      await ref.update({ d1_done: true, d1_left: +left.toFixed(2), d1_srv_left: +(60 - srvEl / 1000).toFixed(2) });   // kept for debugging
       if (left >= 7 && left < 8) await ref.update({ current_day: 2 });
       else await ref.update({ status: 'eliminated', eliminated_day: 1 });
       p = await load();
