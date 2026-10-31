@@ -15,7 +15,8 @@ module.exports = async (req, res) => {
       const pl = await db.ref('players').get();
       const d4 = (await db.ref('secret/day4').get()).val();
       const d5len = (await db.ref('config/day5_len').get()).val();
-      return res.json({ players: pl.val() || {}, day4: d4, day5len: d5len || 8, day5: (await db.ref('secret/day5').get()).val() || {}, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      const d5puz = (await db.ref('secret/day5puz').get()).val();
+      return res.json({ players: pl.val() || {}, day4: d4, day5len: d5len || 8, day5puz: d5puz, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
@@ -36,17 +37,13 @@ module.exports = async (req, res) => {
     else if (action === 'setDay5') {
       const n = Math.floor(Number(req.body.rounds));
       if (!(n >= 3 && n <= 20)) return res.status(400).json({ error: 'rounds must be 3 to 20' });
-      const out = {};
-      for (const k of ['p2', 'p3']) {
-        const x = req.body[k] || {};
-        const q = String(x.q || '').trim().slice(0, 600), a = String(x.a || '').trim().slice(0, 200), m = Math.floor(Number(x.mins));
-        if (!q && !a) continue;
-        if (!q || !a) return res.status(400).json({ error: 'Phase ' + k.slice(1) + ': question and answer are both required' });
-        if (!(m >= 1 && m <= 180)) return res.status(400).json({ error: 'Phase ' + k.slice(1) + ': minutes must be 1 to 180' });
-        out[k] = { q, a, mins: m };
-      }
       await db.ref('config/day5_len').set(n);
-      await db.ref('secret/day5').set(Object.keys(out).length ? out : null);
+    }
+    else if (action === 'setDay5Puz') {
+      const mk = (t, a, m, def) => ({ text: String(t || '').slice(0, 1500), answer: String(a || '').slice(0, 200), minutes: Math.min(120, Math.max(1, Math.floor(Number(m)) || def)) });
+      const p2 = mk(req.body.p2text, req.body.p2ans, req.body.p2min, 10), p3 = mk(req.body.p3text, req.body.p3ans, req.body.p3min, 15);
+      if (!p2.text || !p2.answer || !p3.text || !p3.answer) return res.status(400).json({ error: 'fill text and answer for both phases' });
+      await db.ref('secret/day5puz').set({ p2, p3 });
     }
     else if (action === 'add') {
       const k = String(id || '').toUpperCase();
