@@ -54,6 +54,8 @@ const clean = t => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(
 const ID = /^T9-[A-Z0-9-]{3,20}$/;
 const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
 const D5_DEFAULT_LEN = 8;   // rounds of Simon; the admin can change it (config/day5_len)
+// Answers are compared ignoring case, accents and extra spaces.
+const norm5 = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
@@ -142,46 +144,46 @@ module.exports = async (req, res) => {
     if (day === 5 && live() && !Array.isArray(p.d5_seq)) {
       const len = Number((await db.ref('config/day5_len').get()).val()) || D5_DEFAULT_LEN;
       const seq = Array.from({ length: len }, () => Math.floor(Math.random() * 4));
-      await ref.update({ d5_seq: seq, d5_level: 1 });
+      await ref.update({ d5_seq: seq, d5_level: 1, d5_phase: 1 });
       p = await load();
     }
-    if (action === 'seq' && day === 5 && live() && Array.isArray(p.d5_seq)) {
+    // Day 5 has 3 phases: 1 = Simon, 2 = logic puzzle (10 min), 3 = final puzzle (15 min).
+    // Puzzle text, answer and minutes are set by the admin and stay on the server (secret/day5puz).
+    let sec5 = null;
+    if (day === 5) sec5 = (await db.ref('secret/day5puz').get()).val();
+    const ph = () => p.d5_phase || 1;
+    const cfg5 = () => sec5 && sec5['p' + ph()];
+    const mins5 = () => Number(cfg5() && cfg5().minutes) || (ph() === 2 ? 10 : 15);
+    if (action === 'seq' && day === 5 && live() && ph() === 1 && Array.isArray(p.d5_seq)) {
       const level = p.d5_level || 1;
       const input = req.body.seq;
       const ok = Array.isArray(input) && input.length === level && input.every((v, i) => v === p.d5_seq[i]);
       if (!ok) await ref.update({ status: 'eliminated', eliminated_day: 5 });
-      else if (level >= p.d5_seq.length) await ref.update({ d5_phase: 2, d5_start: null, d5_tries: null });
+      else if (level >= p.d5_seq.length) await ref.update({ d5_phase: 2, d5_start: null, d5_tries: 0 });
       else await ref.update({ d5_level: level + 1 });
       p = await load();
     }
-
-    // Day 5 phases 2 and 3: timed logic challenges. The question is only sent after the player
-    // presses Begin, the clock runs on the server, and answers are checked here.
-    let sec5 = {};
-    if (day === 5 && live()) {
-      sec5 = (await db.ref('secret/day5').get()).val() || {};
-      let ph = p.d5_phase || 1, cfg = sec5['p' + ph];
-      if (ph >= 2 && cfg && p.d5_start && now > p.d5_start + cfg.mins * 60000 + GRACE) {
-        await ref.update({ status: 'eliminated', eliminated_day: 5 }); p = await load();
-      }
-      ph = p.d5_phase || 1; cfg = sec5['p' + ph];
-      if (live() && ph >= 2 && cfg) {
-        if (action === 'begin5' && !p.d5_start) { await ref.update({ d5_start: now, d5_tries: 0 }); p = await load(); }
-        if (action === 'ans5' && p.d5_start && typeof req.body.answer === 'string') {
-          const tries = p.d5_tries || 0;
-          const norm = s => String(s).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-          const given = norm(req.body.answer.slice(0, 100));
-          const ok = given !== '' && String(cfg.a).split('|').some(x => norm(x) === given);
-          if (tries < 3) {
-            if (ok) await ref.update(ph === 2 ? { d5_phase: 3, d5_start: null, d5_tries: null } : { current_day: 6 });
-            else {
-              wrong = true;
-              if (tries + 1 >= 3) await ref.update({ d5_tries: tries + 1, status: 'eliminated', eliminated_day: 5 });
-              else await ref.update({ d5_tries: tries + 1 });
-            }
-            p = await load();
-          }
-        }
+    // A puzzle phase that was started and not solved in time is a timeout
+    if (day === 5 && live() && ph() >= 2 && p.d5_start && now > p.d5_start + mins5() * 60000 + GRACE) {
+      await ref.update({ status: 'eliminated', eliminated_day: 5 });
+      p = await load();
+    }
+    // The player presses Start; the server records the moment, so refreshing never resets the clock
+    if (action === 'p5start' && day === 5 && live() && ph() >= 2 && cfg5() && !p.d5_start) {
+      await ref.update({ d5_start: now, d5_tries: 0 });
+      p = await load();
+    }
+    if (action === 'p5ans' && day === 5 && live() && ph() >= 2 && cfg5() && p.d5_start && typeof req.body.answer === 'string') {
+      const tries = p.d5_tries || 0;
+      if (tries < 3) {
+        const accepted = String(cfg5().answer || '').split('|').map(norm5).filter(Boolean);
+        wrong = !accepted.includes(norm5(req.body.answer.slice(0, 200)));
+        if (!wrong) {
+          if (ph() === 2) await ref.update({ d5_phase: 3, d5_start: null, d5_tries: 0 });
+          else await ref.update({ current_day: 6 });
+        } else if (tries + 1 >= 3) await ref.update({ d5_tries: tries + 1, status: 'eliminated', eliminated_day: 5 });
+        else await ref.update({ d5_tries: tries + 1 });
+        p = await load();
       }
     }
 
@@ -218,15 +220,16 @@ module.exports = async (req, res) => {
 
     const day5view = () => {
       if (!Array.isArray(p.d5_seq)) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
-      const ph = p.d5_phase || 1;
-      if (ph === 1) {
+      const phase = ph();
+      if (phase === 1) {
         const level = p.d5_level || 1;
-        return { screen: 'day5', level, total: p.d5_seq.length, seq: p.d5_seq.slice(0, level) };
+        return { screen: 'day5', phase, level, total: p.d5_seq.length, seq: p.d5_seq.slice(0, level) };
       }
-      const cfg = sec5['p' + ph];
-      if (!cfg) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
-      if (!p.d5_start) return { screen: 'd5intro', phase: ph, mins: cfg.mins };
-      return { screen: 'd5q', phase: ph, q: cfg.q, endsAt: p.d5_start + cfg.mins * 60000, left: 3 - (p.d5_tries || 0), wrong, now: Date.now() };
+      const c = cfg5();
+      if (!c || !c.text) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
+      const minutes = mins5();
+      if (!p.d5_start) return { screen: 'day5intro', phase, minutes };
+      return { screen: 'day5puz', phase, text: c.text, endsAt: p.d5_start + minutes * 60000, left: 3 - (p.d5_tries || 0), wrong, now: Date.now() };
     };
 
     let view;
