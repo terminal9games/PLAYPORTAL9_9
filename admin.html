@@ -22,6 +22,7 @@
   th,td { text-align:left; padding:8px 6px; border-bottom:1px solid rgba(255,255,255,.1); white-space:nowrap; }
   .active { color:var(--cyan); } .eliminated { color:var(--red); } .winner { color:var(--green); }
   td button { padding:5px 9px; font-size:12px; }
+  .ta { width:100%; margin-bottom:10px; font:600 13px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.06); border:1px solid rgba(255,255,255,.3); border-radius:8px; padding:9px 12px; }
   #msg { color:var(--red); font-size:13px; min-height:18px; margin-top:6px; }
   .hide { display:none; }
   @keyframes in { from { opacity:0; transform:scale(.98); } to { opacity:1; transform:none; } }
@@ -57,16 +58,20 @@
     <div class="row"><input id="code4" maxlength="4" placeholder="4-digit code" style="width:140px;margin:0"><button id="save4">Save Day 4</button><span id="msg4"></span></div>
   </div>
   <div class="card">
-    <h1>Day 5: three phases</h1>
-    <div class="row"><b>Phase 1 (Simon)</b><input id="rounds5" type="number" min="3" max="20" value="8" style="width:100px;margin:0" aria-label="Rounds"> rounds</div>
-    <div style="margin-top:14px"><b>Phase 2</b> (logic, no hints)</div>
-    <textarea id="q2" rows="3" placeholder="Question or puzzle" style="width:100%;margin:8px 0;font:600 13px 'Montserrat',sans-serif;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:9px 12px"></textarea>
-    <div class="row"><input id="a2" placeholder="Answer (use | for alternatives)" style="flex:1;min-width:200px;margin:0"><input id="m2" type="number" min="1" max="180" value="10" style="width:90px;margin:0" aria-label="Minutes phase 2"> min</div>
-    <div style="margin-top:14px"><b>Phase 3</b> (final challenge)</div>
-    <textarea id="q3" rows="3" placeholder="Question or puzzle" style="width:100%;margin:8px 0;font:600 13px 'Montserrat',sans-serif;color:#fff;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.3);border-radius:8px;padding:9px 12px"></textarea>
-    <div class="row"><input id="a3" placeholder="Answer (use | for alternatives)" style="flex:1;min-width:200px;margin:0"><input id="m3" type="number" min="1" max="180" value="15" style="width:90px;margin:0" aria-label="Minutes phase 3"> min</div>
-    <div class="row" style="margin-top:12px"><button id="save5">Save Day 5</button><span id="msg5"></span></div>
+    <h1>Day 5: Simon rounds</h1>
+    <div class="row"><input id="rounds5" type="number" min="3" max="20" value="8" style="width:100px;margin:0" aria-label="Rounds"> rounds (a player passes by repeating the full sequence)<button id="save5">Save Day 5</button><span id="msg5"></span></div>
     <div style="margin-top:8px;font-size:12px;color:#bbb">Each player gets their own random sequence, created when they first open Day 5. Set this before opening the day.</div>
+  </div>
+  <div class="card">
+    <h1>Day 5: phases 2 and 3 (logic puzzles)</h1>
+    <div style="font-size:12px;color:#bbb;margin-bottom:12px">Phase 1 is Simon (rounds above). Each puzzle has no hints: the player reads the text and types the answer (3 attempts). The clock starts when the player presses Start and is kept by the server. To accept several answers, separate them with <b>|</b> (for example: 42|forty two). Capitals, accents and extra spaces are ignored.</div>
+    <div style="font-weight:700;font-size:14px;margin-bottom:6px">Phase 2</div>
+    <textarea id="p2text" rows="4" placeholder="Puzzle text for phase 2" class="ta"></textarea>
+    <div class="row" style="margin-bottom:16px"><input id="p2ans" placeholder="Answer" style="flex:1;min-width:160px;margin:0"><input id="p2min" type="number" min="1" max="120" value="10" style="width:90px;margin:0" aria-label="Minutes phase 2"> min</div>
+    <div style="font-weight:700;font-size:14px;margin-bottom:6px">Phase 3</div>
+    <textarea id="p3text" rows="4" placeholder="Puzzle text for phase 3" class="ta"></textarea>
+    <div class="row"><input id="p3ans" placeholder="Answer" style="flex:1;min-width:160px;margin:0"><input id="p3min" type="number" min="1" max="120" value="15" style="width:90px;margin:0" aria-label="Minutes phase 3"> min</div>
+    <div class="row" style="margin-top:12px"><button id="saveP">Save phases 2 and 3</button><span id="msgP"></span></div>
   </div>
   <div class="card">
     <h1>Players (<span id="count">0</span>)</h1>
@@ -127,15 +132,20 @@ $('save4').onclick = async () => {
   $('msg4').textContent = r.error || 'Saved'; setTimeout(() => $('msg4').textContent = '', 3000);
 };
 $('save5').onclick = async () => {
-  const r = await adm('setDay5', { rounds: Number($('rounds5').value),
-    p2: { q: $('q2').value, a: $('a2').value, mins: Number($('m2').value) },
-    p3: { q: $('q3').value, a: $('a3').value, mins: Number($('m3').value) } });
+  const r = await adm('setDay5', { rounds: Number($('rounds5').value) });
   $('msg5').textContent = r.error || 'Saved'; setTimeout(() => $('msg5').textContent = '', 3000);
+};
+$('saveP').onclick = async () => {
+  const r = await adm('setDay5Puz', { p2text: $('p2text').value, p2ans: $('p2ans').value, p2min: Number($('p2min').value), p3text: $('p3text').value, p3ans: $('p3ans').value, p3min: Number($('p3min').value) });
+  $('msgP').textContent = r.error || 'Saved'; setTimeout(() => $('msgP').textContent = '', 3000);
 };
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now, day4, day5len } = await adm('list');
-  if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; $('rounds5').value = day5len || 8; first = false; }
+  const { players, activeDay, endsAt, closed, now, day4, day5len, day5puz } = await adm('list');
+  if (first) {
+    const z = day5puz || {}, a = z.p2 || {}, b = z.p3 || {};
+    $('p2text').value = a.text || ''; $('p2ans').value = a.answer || ''; $('p2min').value = a.minutes || 10;
+    $('p3text').value = b.text || ''; $('p3ans').value = b.answer || ''; $('p3min').value = b.minutes || 15; $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; $('rounds5').value = day5len || 8; first = false; }
   const secs = endsAt ? Math.max(0, Math.round((endsAt - now) / 1000)) : null;
   $('dayInfo').textContent = 'Active: Day ' + activeDay + ' - ' + (closed ? 'CLOSED' : secs === null ? 'no deadline' : 'closes in ' + Math.floor(secs / 3600) + 'h ' + Math.floor(secs % 3600 / 60) + 'm ' + secs % 60 + 's');
   const ids = Object.keys(players).sort();
