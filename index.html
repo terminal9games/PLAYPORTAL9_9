@@ -77,14 +77,13 @@
   .pad[data-i="2"] { border-color:var(--green); --c:#39ff14; }
   .pad[data-i="3"] { border-color:#ffd400; --c:#ffd400; }
   .pad.lit { background:var(--c); box-shadow:0 0 34px var(--c); }
-  /* day 5: timed phases */
-  #d5q .qbox { width:min(560px,92vw); padding:22px; border:2px solid rgba(255,255,255,.35); border-radius:14px; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); }
-  #d5q h2 { font-size:20px; margin:0 0 10px; }
-  #d5q p { margin:0 0 16px; font-size:15px; line-height:1.6; white-space:pre-wrap; }
-  #d5qTimer { font:700 40px 'Montserrat',sans-serif; color:var(--red); text-shadow:0 0 14px rgba(255,0,85,.6); font-variant-numeric:tabular-nums; margin-bottom:14px; }
-  #d5qIntro,#d5qBody { display:none; flex-direction:column; align-items:center; }
-  #d5qIntro.on,#d5qBody.on { display:flex; }
-  #d5qErr { color:var(--red); font-size:13px; min-height:18px; margin:8px 0; }
+  /* day 5: logic phases */
+  .pbox { width:min(560px,92vw); display:flex; flex-direction:column; align-items:center; gap:14px; }
+  .pbox h2 { font-size:22px; margin:0; }
+  .pbox p { margin:0; font-size:15px; line-height:1.6; }
+  #pClock { font:700 40px 'Montserrat',sans-serif; color:var(--red); text-shadow:0 0 14px rgba(255,0,85,.6); font-variant-numeric:tabular-nums; }
+  #pText { width:100%; max-height:38vh; overflow-y:auto; padding:16px; text-align:left; white-space:pre-wrap; font-size:15px; line-height:1.6; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.35); border-radius:10px; }
+  #pErr { color:var(--red); font-size:13px; min-height:18px; }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -175,23 +174,26 @@
   </div>
 </section>
 
-<section id="d5q" class="screen">
+<section id="d5i" class="screen">
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
-  <div class="qbox">
-    <div id="d5qIntro">
-      <h2 id="d5qIntroT"></h2>
-      <p id="d5qIntroP"></p>
-      <button id="d5qBegin" class="gbtn">Begin</button>
-    </div>
-    <div id="d5qBody">
-      <div id="d5qTimer" role="timer">00:00</div>
-      <h2 id="d5qTitle"></h2>
-      <p id="d5qText"></p>
-      <input id="d5qAns" placeholder="Your answer" autocomplete="off" maxlength="100">
-      <div id="d5qErr" role="alert"></div>
-      <button id="d5qSend" class="gbtn">Send answer</button>
-      <p id="d5qTries" style="font-size:13px;margin:10px 0 0"></p>
-    </div>
+  <div class="pbox">
+    <div id="piPhase" style="font:700 13px 'Montserrat',sans-serif;color:#aaa;letter-spacing:2px"></div>
+    <h2>Think carefully</h2>
+    <p>You will have <b id="piMin"></b> minutes to solve it, with no hints. The clock starts when you press Start and keeps running even if you leave this page. You get 3 attempts.</p>
+    <button id="piGo" class="gbtn">Start</button>
+  </div>
+</section>
+
+<section id="d5p" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="pbox">
+    <div id="pPhase" style="font:700 13px 'Montserrat',sans-serif;color:#aaa;letter-spacing:2px"></div>
+    <div id="pClock" role="timer">00:00</div>
+    <div id="pText"></div>
+    <input id="pAns" maxlength="200" placeholder="Your answer" autocomplete="off" spellcheck="false">
+    <div id="pErr" role="alert"></div>
+    <button id="pSend" class="gbtn">Send answer</button>
+    <p id="pTries" style="font-size:13px"></p>
   </div>
 </section>
 
@@ -248,7 +250,7 @@ $('uid').addEventListener('keydown', async e => {
 });
 
 function route(v) {
-  clearTimeout(pollT); clearInterval(d5tick); d5run++;
+  clearTimeout(pollT); d5run++; clearInterval(pTick);
   chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
   if (v.screen === 'passed') return $('pass').classList.add('on');
@@ -273,6 +275,12 @@ function route(v) {
     return typeClues(v.clues);
   }
   if (v.screen === 'day5') return playD5(v);
+  if (v.screen === 'day5intro') {
+    show('d5i'); $('piGo').disabled = false;
+    $('piPhase').textContent = 'PHASE ' + v.phase + ' / 3'; $('piMin').textContent = v.minutes;
+    return;
+  }
+  if (v.screen === 'day5puz') return puzzle5(v);
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
 }
 
@@ -350,7 +358,7 @@ async function flash(i, ms = 450) {
 async function playD5(v) {
   const run = ++d5run;
   show('d5'); d5in = []; d5lock = true; d5lvl = v.level;
-  $('d5info').textContent = 'LEVEL ' + v.level + ' / ' + v.total;
+  $('d5info').textContent = 'PHASE 1 / 3 - LEVEL ' + v.level + ' / ' + v.total;
   $('d5msg').textContent = 'Watch the sequence';
   PADS.forEach(b => b.disabled = true);
   await sleep(900);
@@ -372,6 +380,43 @@ PADS.forEach(b => b.onclick = async () => {
   try { route((await call('seq', { seq: d5in })).view); }
   catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
 });
+
+// ---- Day 5: phases 2 and 3 (logic puzzles) ----
+// The server keeps the answer and the start time. Refreshing the page never resets the clock.
+let pTick, pEnd = 0;
+function puzzle5(v) {
+  show('d5p');
+  $('pPhase').textContent = 'PHASE ' + v.phase + ' / 3';
+  $('pText').textContent = v.text;
+  $('pTries').textContent = 'Attempts left: ' + v.left;
+  $('pErr').textContent = v.wrong ? 'Wrong answer.' : '';
+  $('pAns').value = ''; $('pSend').disabled = false;
+  pEnd = v.endsAt - (v.now - Date.now());
+  let expired = false;
+  const draw = () => {
+    const t = Math.max(0, Math.ceil((pEnd - Date.now()) / 1000));
+    $('pClock').textContent = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60);
+    if (t <= 0 && !expired) {
+      expired = true; clearInterval(pTick);
+      setTimeout(async () => { try { route((await call('view')).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); } }, 3500);   // the server allows a few seconds of grace
+    }
+  };
+  draw(); pTick = setInterval(draw, 250);
+}
+const pad2 = n => String(n).padStart(2, '0');
+$('piGo').onclick = async () => {
+  $('piGo').disabled = true;
+  try { route((await call('p5start')).view); } catch { $('piGo').disabled = false; }
+};
+async function p5send() {
+  const a = $('pAns').value.trim();
+  if (!a) return $('pErr').textContent = 'Write your answer first.';
+  $('pSend').disabled = true;
+  try { route((await call('p5ans', { answer: a })).view); }
+  catch { $('pErr').textContent = 'Connection error. Try again.'; $('pSend').disabled = false; }
+}
+$('pSend').onclick = p5send;
+$('pAns').addEventListener('keydown', e => { if (e.key === 'Enter') p5send(); });
 
 // ---- Day 2 chat ----
 const RIVAL = 'T9-???????';   // the rival's real ID is never sent to the browser
