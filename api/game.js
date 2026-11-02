@@ -1,4 +1,4 @@
-const { db, sign, verify, maintain } = require('./_lib');
+const { db, sign, verify, maintain, phase5, label5, resolveGroup5 } = require('./_lib');
 
 // Chat filter for Day 2. Runs on the server only, so it can't be bypassed from the browser.
 // The raw text is never stored: only the censored version reaches the database.
@@ -53,9 +53,6 @@ const clean = t => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(
 
 const ID = /^T9-[A-Z0-9-]{3,20}$/;
 const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
-const D5_DEFAULT_LEN = 8;   // rounds of Simon; the admin can change it (config/day5_len)
-// Answers are compared ignoring case, accents and extra spaces.
-const norm5 = s => String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
@@ -144,51 +141,30 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Day 5 (Simon): the full random sequence lives on the server. The browser only receives
-    // the part for the current level, and a wrong answer eliminates the player.
-    if (day === 5 && live() && !Array.isArray(p.d5_seq)) {
-      const len = Number((await db.ref('config/day5_len').get()).val()) || D5_DEFAULT_LEN;
-      const seq = Array.from({ length: len }, () => Math.floor(Math.random() * 4));
-      await ref.update({ d5_seq: seq, d5_level: 1, d5_phase: 1 });
-      p = await load();
+    // Day 5 (The Traitor): groups, a secret traitor per group, rounds of chat + vote.
+    // Rounds are resolved from the clock by the first request after they end (see _lib.js).
+    let cfg5 = null;
+    if (day === 5 && p.g5 && p.status === 'active' && p.current_day === 5) {
+      cfg5 = (await db.ref('config/day5').get()).val();
+      if (cfg5 && cfg5.start) { await resolveGroup5(p.g5, cfg5, now); p = await load(); }
     }
-    // Day 5 has 3 phases: 1 = Simon, 2 = logic puzzle (10 min), 3 = final puzzle (15 min).
-    // Puzzle text, answer and minutes are set by the admin and stay on the server (secret/day5puz).
-    let sec5 = null;
-    if (day === 5) sec5 = (await db.ref('secret/day5puz').get()).val();
-    const ph = () => p.d5_phase || 1;
-    const cfg5 = () => sec5 && sec5['p' + ph()];
-    const mins5 = () => Number(cfg5() && cfg5().minutes) || (ph() === 2 ? 10 : 15);
-    if (action === 'seq' && day === 5 && live() && ph() === 1 && Array.isArray(p.d5_seq)) {
-      const level = p.d5_level || 1;
-      const input = req.body.seq;
-      const ok = Array.isArray(input) && input.length === level && input.every((v, i) => v === p.d5_seq[i]);
-      if (!ok) await ref.update({ status: 'eliminated', eliminated_day: 5 });
-      else if (level >= p.d5_seq.length) await ref.update({ d5_phase: 2, d5_start: null, d5_tries: 0 });
-      else await ref.update({ d5_level: level + 1 });
-      p = await load();
-    }
-    // A puzzle phase that was started and not solved in time is a timeout
-    if (day === 5 && live() && ph() >= 2 && p.d5_start && now > p.d5_start + mins5() * 60000 + GRACE) {
-      await ref.update({ status: 'eliminated', eliminated_day: 5 });
-      p = await load();
-    }
-    // The player presses Start; the server records the moment, so refreshing never resets the clock
-    if (action === 'p5start' && day === 5 && live() && ph() >= 2 && cfg5() && !p.d5_start) {
-      await ref.update({ d5_start: now, d5_tries: 0 });
-      p = await load();
-    }
-    if (action === 'p5ans' && day === 5 && live() && ph() >= 2 && cfg5() && p.d5_start && typeof req.body.answer === 'string') {
-      const tries = p.d5_tries || 0;
-      if (tries < 3) {
-        const accepted = String(cfg5().answer || '').split('|').map(norm5).filter(Boolean);
-        wrong = !accepted.includes(norm5(req.body.answer.slice(0, 200)));
-        if (!wrong) {
-          if (ph() === 2) await ref.update({ d5_phase: 3, d5_start: null, d5_tries: 0 });
-          else await ref.update({ current_day: 6 });
-        } else if (tries + 1 >= 3) await ref.update({ d5_tries: tries + 1, status: 'eliminated', eliminated_day: 5 });
-        else await ref.update({ d5_tries: tries + 1 });
-        p = await load();
+    if ((action === 'say5' || action === 'vote5') && day === 5 && live() && p.g5 && cfg5 && cfg5.start) {
+      const ph = phase5(cfg5, now);
+      const g = (await db.ref('groups/day5/' + p.g5).get()).val();
+      const mine = g && g.members ? g.members[uid] : undefined;
+      if (g && !g.result && mine !== undefined && !(g.out && uid in g.out)) {
+        if (action === 'say5' && (ph.state === 'discuss' || ph.state === 'vote')) {
+          const text = clean(req.body.text);
+          if (!text) return res.status(400).json({ error: 'Write something first.' });
+          if (now - (p.chat_last || 0) < 700) return res.status(429).json({ error: 'Slow down.' });
+          await ref.update({ chat_last: now });
+          await db.ref('chats/day5/' + p.g5).push({ s: mine, t: censor(text), ts: now });
+        }
+        if (action === 'vote5' && ph.state === 'vote') {
+          const t = req.body.target;
+          const ok = t === -1 || (Number.isInteger(t) && t !== mine && Object.keys(g.members).some(u => g.members[u] === t && !(g.out && u in g.out)));
+          if (ok) await db.ref(`groups/day5/${p.g5}/votes/r${ph.round}/${uid}`).set(t);
+        }
       }
     }
 
@@ -223,18 +199,24 @@ module.exports = async (req, res) => {
       return { screen: 'day4', clues: sec.clues || [], left: 3 - (p.d4_tries || 0), wrong };
     };
 
-    const day5view = () => {
-      if (!Array.isArray(p.d5_seq)) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
-      const phase = ph();
-      if (phase === 1) {
-        const level = p.d5_level || 1;
-        return { screen: 'day5', phase, level, total: p.d5_seq.length, seq: p.d5_seq.slice(0, level) };
-      }
-      const c = cfg5();
-      if (!c || !c.text) return { screen: 'none', msg: 'Not ready yet. Come back later.' };
-      const minutes = mins5();
-      if (!p.d5_start) return { screen: 'day5intro', phase, minutes };
-      return { screen: 'day5puz', phase, text: c.text, endsAt: p.d5_start + minutes * 60000, left: 3 - (p.d5_tries || 0), wrong, now: Date.now() };
+    const day5view = async () => {
+      if (!p.g5) return { screen: 'none', msg: 'Groups not assigned yet. Come back later.' };
+      if (!cfg5 || !cfg5.start) return { screen: 'none', msg: 'The game has not started yet. Come back later.' };
+      const g = (await db.ref('groups/day5/' + p.g5).get()).val();
+      if (!g || !g.members || g.members[uid] === undefined) return { screen: 'none', msg: 'Groups not assigned yet. Come back later.' };
+      const ph = phase5(cfg5, now), out = g.out || {};
+      const players = Object.keys(g.members).map(u => ({ idx: g.members[u], label: label5(g.members[u]), alive: !(u in out), me: u === uid })).sort((x, y) => x.idx - y.idx);
+      const messages = [];
+      (await db.ref('chats/day5/' + p.g5).orderByKey().limitToLast(80).get()).forEach(c => {
+        const v = c.val();
+        messages.push({ who: v.s >= 0 ? label5(v.s) : null, me: v.s === g.members[uid], sys: v.s < 0, text: v.t });
+      });
+      const myVote = ph.state === 'vote' && g.votes && g.votes['r' + ph.round] ? g.votes['r' + ph.round][uid] : undefined;
+      return {
+        screen: 'day5', state: ph.state, round: ph.round + 1, rounds: cfg5.rounds, endsAt: ph.endsAt, now: Date.now(),
+        role: uid === g.traitor ? 'traitor' : 'crew', me: label5(g.members[uid]), players,
+        myVote: typeof myVote === 'number' ? myVote : null, messages
+      };
     };
 
     let view;
@@ -246,7 +228,7 @@ module.exports = async (req, res) => {
     else if (day === 2) view = await day2view();
     else if (day === 3) view = await day3view();
     else if (day === 4) view = await day4view();
-    else if (day === 5) view = day5view();
+    else if (day === 5) view = await day5view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid) : undefined, view, now: Date.now() });
