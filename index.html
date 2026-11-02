@@ -66,24 +66,32 @@
   #term::after { content:'_'; animation:blink 1s steps(1) infinite; }
   #code { letter-spacing:12px; font-size:22px; width:min(240px,70vw); }
   #d4err { color:var(--red); font-size:13px; min-height:18px; }
-  /* day 5: Simon */
-  #d5info { font:700 13px 'Montserrat',sans-serif; color:#aaa; letter-spacing:2px; margin-bottom:6px; }
-  #d5msg { font:700 22px 'Montserrat',sans-serif; min-height:30px; margin-bottom:22px; }
-  #pads { display:grid; grid-template-columns:1fr 1fr; gap:14px; width:min(340px,80vw); }
-  .pad { aspect-ratio:1; border-radius:18px; border:2px solid; cursor:pointer; background:rgba(255,255,255,.03); transition:background .12s, box-shadow .12s; }
-  .pad:disabled { cursor:default; }
-  .pad[data-i="0"] { border-color:var(--cyan); --c:#00f3ff; }
-  .pad[data-i="1"] { border-color:var(--red); --c:#ff0055; }
-  .pad[data-i="2"] { border-color:var(--green); --c:#39ff14; }
-  .pad[data-i="3"] { border-color:#ffd400; --c:#ffd400; }
-  .pad.lit { background:var(--c); box-shadow:0 0 34px var(--c); }
-  /* day 5: logic phases */
-  .pbox { width:min(560px,92vw); display:flex; flex-direction:column; align-items:center; gap:14px; }
-  .pbox h2 { font-size:22px; margin:0; }
-  .pbox p { margin:0; font-size:15px; line-height:1.6; }
-  #pClock { font:700 40px 'Montserrat',sans-serif; color:var(--red); text-shadow:0 0 14px rgba(255,0,85,.6); font-variant-numeric:tabular-nums; }
-  #pText { width:100%; max-height:38vh; overflow-y:auto; padding:16px; text-align:left; white-space:pre-wrap; font-size:15px; line-height:1.6; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.35); border-radius:10px; }
-  #pErr { color:var(--red); font-size:13px; min-height:18px; }
+  /* day 5: the traitor */
+  #d5 { justify-content:flex-start; padding-top:78px; }
+  .t5 { flex:1; min-height:0; width:min(560px,94vw); display:flex; flex-direction:column; gap:10px; }
+  #t5head { display:flex; justify-content:space-between; align-items:center; gap:10px; font:700 12px 'Montserrat',sans-serif; letter-spacing:1px; color:#aaa; text-align:left; }
+  #t5clock { font:700 28px 'Montserrat',sans-serif; color:var(--red); text-shadow:0 0 12px rgba(255,0,85,.6); font-variant-numeric:tabular-nums; }
+  #t5role { padding:8px 12px; border-radius:10px; border:1px solid; font-size:13px; line-height:1.5; text-align:left; background:rgba(255,255,255,.03); }
+  #t5role.crew { border-color:var(--cyan); color:var(--cyan); }
+  #t5role.traitor { border-color:var(--red); color:var(--red); text-shadow:0 0 8px rgba(255,0,85,.5); }
+  #t5log { flex:1; min-height:0; overflow-y:auto; padding:12px 14px; text-align:left; font-size:13px; line-height:1.5; background:rgba(10,10,14,.94); border:1px solid rgba(255,255,255,.35); border-radius:10px; }
+  #t5log .m { margin:0 0 8px; word-break:break-word; }
+  #t5log .who { font-weight:700; margin-right:6px; color:#aaa; }
+  #t5log .me .who { color:var(--cyan); }
+  #t5log .sys { color:#ffd400; font-weight:600; }
+  #t5log .empty { color:#888; text-align:center; margin-top:18px; }
+  #t5vote { display:none; text-align:center; }
+  #t5vote.on { display:block; }
+  #t5vtitle { font-weight:700; font-size:14px; margin-bottom:8px; }
+  #t5btns { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  #t5btns button { padding:9px 16px; font:700 13px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.45); border-radius:10px; cursor:pointer; }
+  #t5btns button:hover { border-color:var(--cyan); }
+  #t5btns button.sel { border-color:var(--green); color:var(--green); box-shadow:0 0 12px rgba(57,255,20,.4); }
+  #t5form { display:flex; gap:8px; }
+  #t5in { flex:1; width:auto; padding:10px 12px; font-size:14px; text-align:left; border-width:1px; border-radius:8px; }
+  #t5send { padding:10px 18px; font:700 13px 'Montserrat',sans-serif; color:var(--cyan); background:rgba(255,255,255,.04); border:1px solid var(--cyan); border-radius:8px; cursor:pointer; }
+  #t5send:disabled,#t5in:disabled { opacity:.5; cursor:default; }
+  #t5err { min-height:16px; font-size:11px; color:var(--red); text-align:left; }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -164,36 +172,13 @@
 
 <section id="d5" class="screen">
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
-  <div id="d5info"></div>
-  <div id="d5msg" aria-live="polite"></div>
-  <div id="pads">
-    <button class="pad" data-i="0" aria-label="Cyan"></button>
-    <button class="pad" data-i="1" aria-label="Red"></button>
-    <button class="pad" data-i="2" aria-label="Green"></button>
-    <button class="pad" data-i="3" aria-label="Yellow"></button>
-  </div>
-</section>
-
-<section id="d5i" class="screen">
-  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
-  <div class="pbox">
-    <div id="piPhase" style="font:700 13px 'Montserrat',sans-serif;color:#aaa;letter-spacing:2px"></div>
-    <h2>Think carefully</h2>
-    <p>You will have <b id="piMin"></b> minutes to solve it, with no hints. The clock starts when you press Start and keeps running even if you leave this page. You get 3 attempts.</p>
-    <button id="piGo" class="gbtn">Start</button>
-  </div>
-</section>
-
-<section id="d5p" class="screen">
-  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
-  <div class="pbox">
-    <div id="pPhase" style="font:700 13px 'Montserrat',sans-serif;color:#aaa;letter-spacing:2px"></div>
-    <div id="pClock" role="timer">00:00</div>
-    <div id="pText"></div>
-    <input id="pAns" maxlength="200" placeholder="Your answer" autocomplete="off" spellcheck="false">
-    <div id="pErr" role="alert"></div>
-    <button id="pSend" class="gbtn">Send answer</button>
-    <p id="pTries" style="font-size:13px"></p>
+  <div class="t5">
+    <div id="t5head"><span id="t5info"></span><span id="t5clock" role="timer">--:--</span></div>
+    <div id="t5role"></div>
+    <div id="t5log" aria-live="polite"></div>
+    <div id="t5vote"><div id="t5vtitle">Who do you expel?</div><div id="t5btns"></div></div>
+    <div id="t5form"><input id="t5in" maxlength="200" placeholder="Write a message" autocomplete="off" aria-label="Message"><button id="t5send" type="button">Send</button></div>
+    <div id="t5err" role="alert"></div>
   </div>
 </section>
 
@@ -250,7 +235,7 @@ $('uid').addEventListener('keydown', async e => {
 });
 
 function route(v) {
-  clearTimeout(pollT); d5run++; clearInterval(pTick);
+  clearTimeout(pollT); clearInterval(t5T);
   chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
   if (v.screen === 'passed') return $('pass').classList.add('on');
@@ -275,12 +260,6 @@ function route(v) {
     return typeClues(v.clues);
   }
   if (v.screen === 'day5') return playD5(v);
-  if (v.screen === 'day5intro') {
-    show('d5i'); $('piGo').disabled = false;
-    $('piPhase').textContent = 'PHASE ' + v.phase + ' / 3'; $('piMin').textContent = v.minutes;
-    return;
-  }
-  if (v.screen === 'day5puz') return puzzle5(v);
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
 }
 
@@ -338,86 +317,73 @@ $('sendBtn').onclick = async () => {
   try { route((await call('code', { code: c })).view); } catch { $('d4err').textContent = 'Connection error. Try again.'; }
 };
 
-// ---- Day 5: Simon ----
-// The server holds the whole sequence and only sends the part for the current level.
-// Tapping the full sequence correctly moves you to the next level; one mistake eliminates you.
-const PADS = [...document.querySelectorAll('.pad')];
-const TONES = [262, 330, 392, 523];
-let d5run = 0, d5lock = true, d5in = [], d5lvl = 0;
-function beep(i) {
-  try {
-    const ac = window.__ac = window.__ac || new (window.AudioContext || window.webkitAudioContext)();
-    const o = ac.createOscillator(), g = ac.createGain();
-    o.frequency.value = TONES[i]; g.gain.value = 0.08;
-    o.connect(g).connect(ac.destination); o.start(); o.stop(ac.currentTime + 0.25);
-  } catch {}
-}
-async function flash(i, ms = 450) {
-  PADS[i].classList.add('lit'); beep(i);
-  await sleep(ms); PADS[i].classList.remove('lit');
-}
-async function playD5(v) {
-  const run = ++d5run;
-  show('d5'); d5in = []; d5lock = true; d5lvl = v.level;
-  $('d5info').textContent = 'PHASE 1 / 3 - LEVEL ' + v.level + ' / ' + v.total;
-  $('d5msg').textContent = 'Watch the sequence';
-  PADS.forEach(b => b.disabled = true);
-  await sleep(900);
-  for (const i of v.seq) {
-    if (run !== d5run) return;
-    await flash(i); await sleep(200);
-  }
-  if (run !== d5run) return;
-  $('d5msg').textContent = 'Your turn';
-  PADS.forEach(b => b.disabled = false); d5lock = false;
-}
-PADS.forEach(b => b.onclick = async () => {
-  if (d5lock) return;
-  const i = Number(b.dataset.i);
-  d5in.push(i); flash(i, 220);
-  if (d5in.length < d5lvl) return;
-  d5lock = true; PADS.forEach(x => x.disabled = true);
-  $('d5msg').textContent = 'Checking...';
-  try { route((await call('seq', { seq: d5in })).view); }
-  catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
-});
-
-// ---- Day 5: phases 2 and 3 (logic puzzles) ----
-// The server keeps the answer and the start time. Refreshing the page never resets the clock.
-let pTick, pEnd = 0;
-function puzzle5(v) {
-  show('d5p');
-  $('pPhase').textContent = 'PHASE ' + v.phase + ' / 3';
-  $('pText').textContent = v.text;
-  $('pTries').textContent = 'Attempts left: ' + v.left;
-  $('pErr').textContent = v.wrong ? 'Wrong answer.' : '';
-  $('pAns').value = ''; $('pSend').disabled = false;
-  pEnd = v.endsAt - (v.now - Date.now());
-  let expired = false;
-  const draw = () => {
-    const t = Math.max(0, Math.ceil((pEnd - Date.now()) / 1000));
-    $('pClock').textContent = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60);
-    if (t <= 0 && !expired) {
-      expired = true; clearInterval(pTick);
-      setTimeout(async () => { try { route((await call('view')).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); } }, 3500);   // the server allows a few seconds of grace
-    }
-  };
-  draw(); pTick = setInterval(draw, 250);
-}
+// ---- Day 5: The Traitor ----
+// Everything (roles, votes, results) is decided on the server. The browser only draws what it receives
+// and asks again every 3 seconds. Your own role is the only secret it ever gets.
+let t5T = 0, t5End = 0, t5Sig = '', t5VSig = '', t5State = '', t5Busy = false;
 const pad2 = n => String(n).padStart(2, '0');
-$('piGo').onclick = async () => {
-  $('piGo').disabled = true;
-  try { route((await call('p5start')).view); } catch { $('piGo').disabled = false; }
-};
-async function p5send() {
-  const a = $('pAns').value.trim();
-  if (!a) return $('pErr').textContent = 'Write your answer first.';
-  $('pSend').disabled = true;
-  try { route((await call('p5ans', { answer: a })).view); }
-  catch { $('pErr').textContent = 'Connection error. Try again.'; $('pSend').disabled = false; }
+function t5Refresh() {
+  clearTimeout(pollT);
+  pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { t5Refresh(); } }, 3000);
 }
-$('pSend').onclick = p5send;
-$('pAns').addEventListener('keydown', e => { if (e.key === 'Enter') p5send(); });
+function playD5(v) {
+  show('d5'); t5Refresh();
+  const lobby = v.state === 'lobby', voting = v.state === 'vote', chatOpen = v.state === 'discuss' || voting;
+  $('t5info').textContent = lobby ? 'LOBBY - THE GAME STARTS SOON' : v.state === 'over' ? 'COUNTING THE VOTES' : 'ROUND ' + v.round + ' / ' + v.rounds + ' - ' + (voting ? 'VOTE' : 'DISCUSSION');
+  const role = $('t5role');
+  role.className = v.role;
+  role.textContent = v.role === 'traitor'
+    ? 'You are ' + v.me + ' and you are the TRAITOR. Blend in, mislead the group and do not get expelled.'
+    : 'You are ' + v.me + ' and you are CREW. One of the others is the traitor. Find them and vote them out.';
+  // clock
+  t5End = v.endsAt - (v.now - Date.now());
+  clearInterval(t5T);
+  const draw = () => { const t = Math.max(0, Math.ceil((t5End - Date.now()) / 1000)); $('t5clock').textContent = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); };
+  draw(); t5T = setInterval(draw, 250);
+  // chat log (rebuilt only when something changed, so scrolling and typing are never disturbed)
+  const log = $('t5log'), list = v.messages || [];
+  const sig = list.length + '|' + (list.length ? list[list.length - 1].text : '');
+  if (sig !== t5Sig) {
+    t5Sig = sig;
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.textContent = '';
+    if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = lobby ? 'The chat opens when the game starts.' : 'No messages yet. Say something.'; log.appendChild(e); }
+    for (const m of list) {
+      const row = document.createElement('div'); row.className = 'm' + (m.sys ? ' sys' : m.me ? ' me' : '');
+      if (!m.sys) { const who = document.createElement('span'); who.className = 'who'; who.textContent = m.me ? 'You' : m.who; row.appendChild(who); }
+      row.appendChild(document.createTextNode(m.text));   // text nodes only: no HTML injection
+      log.appendChild(row);
+    }
+    if (atEnd) log.scrollTop = log.scrollHeight;
+  }
+  // voting buttons
+  $('t5vote').classList.toggle('on', voting);
+  const vsig = v.state + '|' + v.round + '|' + v.myVote + '|' + v.players.map(p => p.alive ? 1 : 0).join('');
+  if (voting && vsig !== t5VSig) {
+    t5VSig = vsig;
+    const box = $('t5btns'); box.textContent = '';
+    const add = (label, target) => { const b = document.createElement('button'); b.textContent = label; if (v.myVote === target) b.className = 'sel'; b.onclick = () => t5Vote(target); box.appendChild(b); };
+    v.players.filter(p => p.alive && !p.me).forEach(p => add(p.label, p.idx));
+    add('Skip', -1);
+  }
+  if (!voting) t5VSig = '';
+  $('t5in').disabled = $('t5send').disabled = !chatOpen;
+  $('t5in').placeholder = chatOpen ? 'Write a message' : lobby ? 'Chat opens when the game starts' : 'Chat closed';
+  t5State = v.state;
+}
+async function t5Vote(target) {
+  try { route((await call('vote5', { target })).view); } catch (x) { $('t5err').textContent = (x && x.error) || 'Connection error. Try again.'; }
+}
+async function t5Say() {
+  const t = $('t5in').value.trim();
+  if (!t || t5Busy) return;
+  t5Busy = true; $('t5err').textContent = '';
+  try { $('t5in').value = ''; route((await call('say5', { text: t })).view); }
+  catch (x) { $('t5in').value = t; $('t5err').textContent = (x && x.error) || 'Connection error. Try again.'; }
+  t5Busy = false;
+}
+$('t5send').onclick = t5Say;
+$('t5in').addEventListener('keydown', e => { if (e.key === 'Enter') t5Say(); });
 
 // ---- Day 2 chat ----
 const RIVAL = 'T9-???????';   // the rival's real ID is never sent to the browser
@@ -479,6 +445,16 @@ $('selBtn').onclick = () => { pick = Number($('slider').value); $('mine').textCo
 $('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view(mode === 'd3' ? 'd3pick' : 'd2pick'); } };
 async function reveal(v) {
   show('d2'); d2view('d2rev');
+  if (v.day === 5) {
+    $('r1').textContent = v.expelled ? 'The group expelled you' : 'The traitor was ' + v.traitor;
+    $('r2').textContent = '';
+    await sleep(2500);
+    $('r2').textContent = v.expelled ? 'You were not the traitor.' : v.role === 'traitor' ? (v.ok ? 'You fooled everyone.' : 'They found you.') : (v.ok ? 'You found the traitor.' : 'The traitor fooled you.');
+    await sleep(3500);
+    try { await call('ack'); } catch {}
+    if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+    return;
+  }
   $('r1').textContent = 'You chose ' + String(v.mine).toUpperCase(); $('r2').textContent = '';
   await sleep(2000);
   if (v.day === 3) {
