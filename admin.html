@@ -70,6 +70,11 @@
     <div id="g5info" style="margin-top:12px;font-size:12px;line-height:1.7"></div>
   </div>
   <div class="card">
+    <h1>Add players</h1>
+    <textarea id="newIds" rows="4" class="ta" placeholder="One ID per line, for example T9-ABC123"></textarea>
+    <div class="row"><input id="newDay" type="number" min="1" max="9" value="1" style="width:80px;margin:0" aria-label="Starting day"> starting day<button id="addBtn">Add players</button><span id="addMsg"></span></div>
+  </div>
+  <div class="card">
     <h1>Players (<span id="count">0</span>)</h1>
     <div class="tablewrap"><table>
       <thead><tr><th>ID</th><th>Status</th><th>Day</th><th>Actions</th></tr></thead>
@@ -131,6 +136,15 @@ $('start5').onclick = async () => {
   if (!confirm('Create the Day 5 groups and start the game? This replaces any existing groups.')) return;
   const r = await adm('start5', { discuss: Number($('t5d').value), vote: Number($('t5v').value), rounds: Number($('t5r').value), lobby: Number($('t5l').value) });
   $('msg5').textContent = r.error || (r.groups + ' group(s), ' + r.players + ' players. Announce it now.'); setTimeout(() => $('msg5').textContent = '', 8000); load();
+};
+$('addBtn').onclick = async () => {
+  const ids = $('newIds').value.split(/[\s,;]+/).filter(Boolean);
+  if (!ids.length) { $('addMsg').textContent = 'Paste at least one ID.'; return; }
+  const r = await adm('addMany', { ids, day: Number($('newDay').value) });
+  if (r.error) { $('addMsg').textContent = r.error; return; }
+  $('addMsg').textContent = r.added + ' added' + (r.existing ? ', ' + r.existing + ' already existed' : '') + (r.bad.length ? ', invalid: ' + r.bad.join(' ') : '');
+  if (!r.bad.length) $('newIds').value = '';
+  setTimeout(() => $('addMsg').textContent = '', 10000); load();
 };
 let first = true;
 async function load() {
