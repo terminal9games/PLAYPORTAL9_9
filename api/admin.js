@@ -61,6 +61,20 @@ module.exports = async (req, res) => {
       await db.ref().update(up);
       return res.json({ groups: g, players: ids.length });
     }
+    else if (action === 'addMany') {
+      // Adds many players at once. Existing IDs are left untouched.
+      const day = Math.min(9, Math.max(1, Math.floor(Number(req.body.day)) || 1));
+      const raw = (Array.isArray(req.body.ids) ? req.body.ids : []).map(x => String(x).trim().toUpperCase()).filter(Boolean);
+      const ids = [...new Set(raw)].slice(0, 500);
+      const bad = ids.filter(k => !/^T9-[A-Z0-9-]{3,20}$/.test(k));
+      const good = ids.filter(k => !bad.includes(k));
+      const cur = (await db.ref('players').get()).val() || {};
+      const fresh = good.filter(k => !cur[k]);
+      const up = {};
+      fresh.forEach(k => { up['players/' + k] = { status: 'active', current_day: day }; });
+      if (fresh.length) await db.ref().update(up);
+      return res.json({ added: fresh.length, existing: good.length - fresh.length, bad });
+    }
     else if (action === 'add') {
       const k = String(id || '').toUpperCase();
       if (!/^T9-[A-Z0-9-]{3,20}$/.test(k)) return res.status(400).json({ error: 'bad id' });
