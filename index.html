@@ -92,6 +92,21 @@
   #t5send { padding:10px 18px; font:700 13px 'Montserrat',sans-serif; color:var(--cyan); background:rgba(255,255,255,.04); border:1px solid var(--cyan); border-radius:8px; cursor:pointer; }
   #t5send:disabled,#t5in:disabled { opacity:.5; cursor:default; }
   #t5err { min-height:16px; font-size:11px; color:var(--red); text-align:left; }
+  /* day 6: sacrifices */
+  .t6 { width:min(560px,92vw); display:flex; flex-direction:column; gap:20px; align-items:center; }
+  #t6clock { position:absolute; top:84px; right:24px; font:700 13px 'Montserrat',sans-serif; color:#777; font-variant-numeric:tabular-nums; }
+  #t6txt { width:100%; white-space:pre-wrap; font-size:17px; line-height:1.7; text-align:center; min-height:96px; }
+  #t6opts { display:flex; flex-direction:column; gap:10px; width:100%; }
+  #t6opts button,#t6next,#t6ok { padding:13px 18px; font:700 15px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.4); border-radius:12px; cursor:pointer; }
+  #t6opts button:hover,#t6next:hover,#t6ok:hover { border-color:var(--cyan); }
+  #t6opts button.sel { border-color:var(--red); color:var(--red); box-shadow:0 0 14px rgba(255,0,85,.35); }
+  #t6opts button:disabled,#t6next:disabled,#t6ok:disabled { opacity:.5; cursor:default; }
+  .sacd { display:block; font-weight:400; font-size:12px; color:#aaa; margin-top:3px; }
+  #t6next,#t6ok { display:none; }
+  #t6in { width:min(420px,86vw); display:none; }
+  #t6err { min-height:16px; font-size:12px; color:var(--red); }
+  #t6w { position:fixed; bottom:20px; left:0; right:0; z-index:4; text-align:center; font:italic 600 13px 'Montserrat',sans-serif; color:#b88; opacity:0; transition:opacity 3s ease; pointer-events:none; }
+  #t6w.on { opacity:.9; }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -182,6 +197,37 @@
   </div>
 </section>
 
+<section id="d6i" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">Personal file</h2>
+    <p style="margin:0;font-size:15px;line-height:1.7">A solo game made only of text. There are no right answers.<br>You have <b id="t6min"></b> minutes from the moment you press Start, and the clock keeps running if you leave.</p>
+    <button id="t6go" class="gbtn">Start</button>
+  </div>
+</section>
+
+<section id="d6" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="t6clock" role="timer">--:--</div>
+  <div class="t6">
+    <div id="t6txt" aria-live="polite"></div>
+    <div id="t6opts"></div>
+    <input id="t6in" maxlength="40" placeholder="T9-..." autocomplete="off" spellcheck="false" autocapitalize="characters">
+    <button id="t6ok" type="button">Confirm</button>
+    <button id="t6next" type="button">Continue</button>
+    <div id="t6err" role="alert"></div>
+  </div>
+</section>
+
+<section id="d6w" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">Terminal 9 will decide<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p style="margin:0;font-size:15px">Your file is closed. Come back later to see the result.</p>
+  </div>
+</section>
+<div id="t6w" aria-live="polite"></div>
+
 <div id="chat" class="chat">
   <button id="chatTab" type="button" aria-expanded="false" aria-controls="chatPanel">Chat with your rival<span id="chatDot" aria-label="New messages"></span></button>
   <div id="chatPanel">
@@ -236,6 +282,8 @@ $('uid').addEventListener('keydown', async e => {
 
 function route(v) {
   clearTimeout(pollT); clearInterval(t5T);
+  if (!String(v.screen).startsWith('day6')) setWhisper(null);
+  clearInterval(t6Clock); t6Run++;
   chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
   if (v.screen === 'passed') return $('pass').classList.add('on');
@@ -260,6 +308,9 @@ function route(v) {
     return typeClues(v.clues);
   }
   if (v.screen === 'day5') return playD5(v);
+  if (v.screen === 'day6intro') { show('d6i'); $('t6go').disabled = false; $('t6min').textContent = v.minutes; return; }
+  if (v.screen === 'day6') return playD6(v);
+  if (v.screen === 'day6wait') return waitD6(v);
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
 }
 
@@ -385,6 +436,65 @@ async function t5Say() {
 $('t5send').onclick = t5Say;
 $('t5in').addEventListener('keydown', e => { if (e.key === 'Enter') t5Say(); });
 
+// ---- Day 6: Sacrifices ----
+// A solo, text-only game. The server holds the script and every hidden value; the browser only shows the
+// current step and sends the answer back. The clock is kept by the server, so leaving the page does not pause it.
+let t6Run = 0, t6Clock = 0, t6Sel = null;
+function setWhisper(text) {
+  const w = $('t6w');
+  if (text && w.textContent !== text) { w.textContent = text; w.classList.add('on'); }
+  else if (!text) { w.classList.remove('on'); w.textContent = ''; }
+}
+$('t6go').onclick = async () => {
+  $('t6go').disabled = true;
+  try { route((await call('d6start')).view); } catch { $('t6go').disabled = false; }
+};
+async function playD6(v) {
+  const run = ++t6Run, st = v.step;
+  clearInterval(t6Clock); t6Sel = null;
+  show('d6'); setWhisper(v.whisper);
+  $('t6txt').textContent = ''; $('t6opts').textContent = ''; $('t6err').textContent = '';
+  $('t6next').style.display = $('t6ok').style.display = $('t6in').style.display = 'none';
+  const end = v.endsAt - (v.now - Date.now());
+  const draw = () => { const t = Math.max(0, Math.ceil((end - Date.now()) / 1000)); $('t6clock').textContent = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); };
+  draw(); t6Clock = setInterval(draw, 1000);
+  const ready = v.readyAt - (v.now - Date.now());
+  const lines = st.type === 'text' ? st.lines : [st.q];
+  for (const l of lines) {
+    for (const ch of l + '\n') { if (run !== t6Run) return; $('t6txt').textContent += ch; await sleep(ch === '\n' ? 320 : 15); }
+  }
+  while (Date.now() < ready) { if (run !== t6Run) return; await sleep(250); }
+  if (run !== t6Run) return;
+  const send = async (action, value, btns) => {
+    btns.forEach(b => b.disabled = true); $('t6err').textContent = '';
+    try { route((await call(action, { idx: st.idx, value })).view); }
+    catch (x) { $('t6err').textContent = (x && x.error) || 'Connection error. Try again.'; btns.forEach(b => b.disabled = false); }
+  };
+  if (st.type === 'text') {
+    const b = $('t6next'); b.style.display = 'block'; b.disabled = false; b.onclick = () => send('d6next', null, [b]);
+  } else if (st.type === 'choice') {
+    const box = $('t6opts');
+    st.opts.forEach(o => { const b = document.createElement('button'); b.textContent = o.label; b.onclick = () => send('d6ans', o.id, [...box.children]); box.appendChild(b); });
+  } else if (st.type === 'input') {
+    const i = $('t6in'), b = $('t6ok'); i.value = ''; i.style.display = 'block'; b.style.display = 'block'; b.disabled = false; i.focus();
+    const go = () => { if (i.value.trim()) send('d6ans', i.value.trim(), [b, i]); };
+    b.onclick = go; i.onkeydown = e => { if (e.key === 'Enter') go(); };
+  } else if (st.type === 'sacrifice') {
+    const box = $('t6opts'), b = $('t6ok'); b.textContent = 'Give it up'; b.disabled = true; b.style.display = 'block';
+    st.items.forEach(it => {
+      const x = document.createElement('button');
+      x.textContent = it.name; const d = document.createElement('span'); d.className = 'sacd'; d.textContent = it.desc; x.appendChild(d);
+      x.onclick = () => { t6Sel = it.id; [...box.children].forEach(c => c.classList.remove('sel')); x.classList.add('sel'); b.disabled = false; };
+      box.appendChild(x);
+    });
+    b.onclick = () => { if (t6Sel) send('d6ans', t6Sel, [b, ...box.children]); };
+  }
+}
+function waitD6(v) {
+  show('d6w'); setWhisper(v.whisper);
+  pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { waitD6(v); } }, 20000);
+}
+
 // ---- Day 2 chat ----
 const RIVAL = 'T9-???????';   // the rival's real ID is never sent to the browser
 let chatOn = false, chatOpen = false, chatT, chatSeen = 0, chatBusy = false, chatSig = '';
@@ -445,6 +555,16 @@ $('selBtn').onclick = () => { pick = Number($('slider').value); $('mine').textCo
 $('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view(mode === 'd3' ? 'd3pick' : 'd2pick'); } };
 async function reveal(v) {
   show('d2'); d2view('d2rev');
+  if (v.day === 6) {
+    $('r1').textContent = v.kept ? 'You kept: ' + v.kept : 'Your file is closed';
+    $('r2').textContent = '';
+    await sleep(2500);
+    $('r2').textContent = v.ok ? 'Terminal 9 has no more questions. For now.' : 'Terminal 9 has seen enough.';
+    await sleep(3500);
+    try { await call('ack'); } catch {}
+    if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+    return;
+  }
   if (v.day === 5) {
     $('r1').textContent = v.expelled ? 'The group expelled you' : 'The traitor was ' + v.traitor;
     $('r2').textContent = '';
