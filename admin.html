@@ -70,6 +70,17 @@
     <div id="g5info" style="margin-top:12px;font-size:12px;line-height:1.7"></div>
   </div>
   <div class="card">
+    <h1>Day 6: Sacrifices</h1>
+    <div style="font-size:12px;color:#bbb;margin-bottom:12px">Solo game. Each player gets their own clock from the moment they press Start. At the end of the day (or when you press "Close day now") finishers are ranked by a hidden score and a percentage is eliminated. Anyone who did not finish is eliminated. Players are told nothing until the day closes.</div>
+    <div class="row" style="margin-bottom:10px">
+      <input id="d6m" type="number" min="10" max="120" value="40" style="width:80px;margin:0" aria-label="Minutes per player"> min per player
+      <input id="d6c" type="number" min="0" max="90" value="40" style="width:80px;margin:0" aria-label="Percent eliminated"> % eliminated
+      <select id="d6s" aria-label="Who is eliminated"><option value="cold">eliminate the coldest (most selfish)</option><option value="warm">eliminate the warmest (most selfless)</option></select>
+    </div>
+    <div class="row"><button id="save6">Save Day 6 settings</button><span id="msg6"></span></div>
+    <div id="d6info" style="margin-top:12px;font-size:12px;line-height:1.7"></div>
+  </div>
+  <div class="card">
     <h1>Add players</h1>
     <textarea id="newIds" rows="4" class="ta" placeholder="One ID per line, for example T9-ABC123"></textarea>
     <div class="row"><input id="newDay" type="number" min="1" max="9" value="1" style="width:80px;margin:0" aria-label="Starting day"> starting day<button id="addBtn">Add players</button><span id="addMsg"></span></div>
@@ -146,10 +157,14 @@ $('addBtn').onclick = async () => {
   if (!r.bad.length) $('newIds').value = '';
   setTimeout(() => $('addMsg').textContent = '', 10000); load();
 };
+$('save6').onclick = async () => {
+  const r = await adm('setDay6', { minutes: Number($('d6m').value), cut: Number($('d6c').value), side: $('d6s').value });
+  $('msg6').textContent = r.error || 'Saved'; setTimeout(() => $('msg6').textContent = '', 3000);
+};
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now, day4, day5 } = await adm('list');
-  if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; first = false; }
+  const { players, activeDay, endsAt, closed, now, day4, day5, day6 } = await adm('list');
+  if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; const c6 = (day6 && day6.cfg) || {}; $('d6m').value = c6.minutes || 40; $('d6c').value = c6.cut == null ? 40 : c6.cut; $('d6s').value = c6.side || 'cold'; first = false; }
   const c5 = day5 && day5.cfg, gs = (day5 && day5.groups) || {};
   const gids = Object.keys(gs);
   $('g5info').innerHTML = !c5 || !gids.length ? 'No groups yet.' :
@@ -159,6 +174,14 @@ async function load() {
       return 'Group ' + (i + 1) + ' (' + esc(gs[g].result ? 'result: ' + gs[g].result : 'in play') + '): ' +
         Object.keys(m).sort((a, b) => m[a] - m[b]).map(u => esc(String.fromCharCode(65 + m[u])) + '=' + esc(u) + (u === gs[g].traitor ? ' (TRAITOR)' : '') + (u in out ? ' (expelled)' : '')).join(', ');
     }).join('<br>');
+  const d6d = (day6 && day6.data) || {}, d6l = (day6 && day6.links) || {};
+  const d6ids = Object.keys(d6d).sort();
+  const links = [];
+  Object.keys(d6l).forEach(b => Object.keys(d6l[b]).forEach(a => links.push(esc(a) + ' named ' + esc(b) + ' - answer to betray: ' + esc(d6l[b][a].betray || 'not asked yet'))));
+  $('d6info').innerHTML = !d6ids.length ? 'Nobody has started Day 6 yet.' :
+    '<b>' + d6ids.filter(u => d6d[u].done).length + ' finished</b> / ' + d6ids.length + ' started<br>' +
+    d6ids.map(u => esc(u) + ': ' + (d6d[u].done ? 'finished' : 'step ' + esc(d6d[u].idx)) + ', hidden score ' + esc(d6d[u].cold || 0) + (d6d[u].friendId ? ', named ' + esc(d6d[u].friendId) : '')).join('<br>') +
+    (links.length ? '<br><br><b>Acquaintances</b><br>' + links.join('<br>') : '');
   const secs = endsAt ? Math.max(0, Math.round((endsAt - now) / 1000)) : null;
   $('dayInfo').textContent = 'Active: Day ' + activeDay + ' - ' + (closed ? 'CLOSED' : secs === null ? 'no deadline' : 'closes in ' + Math.floor(secs / 3600) + 'h ' + Math.floor(secs % 3600 / 60) + 'm ' + secs % 60 + 's');
   const ids = Object.keys(players).sort();
