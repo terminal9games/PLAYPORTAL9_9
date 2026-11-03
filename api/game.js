@@ -1,4 +1,4 @@
-const { db, sign, verify, maintain, phase5, label5, resolveGroup5 } = require('./_lib');
+const { db, sign, verify, maintain, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, IP_MSG } = require('./_lib');
 const D6 = require('./_d6');
 
 // Chat filter for Day 2. Runs on the server only, so it can't be bypassed from the browser.
@@ -54,20 +54,28 @@ const clean = t => String(t == null ? '' : t).replace(/\s+/g, ' ').trim().slice(
 
 const ID = /^T9-[A-Z0-9-]{3,20}$/;
 const D1_MS = 60000, LEAD = 2000, GRACE = 3000;
+// During these days a new login from a different network is refused while the ID was active in the last 3 minutes
+// (stops someone from taking over an account in the middle of a critical day).
+const LOCK_DAYS = [3, 4], LOCK_MS = 3 * 60000;
+const flagIds = (text, uid) => { if (/t9-[a-z0-9-]{3,}/i.test(String(text))) return secLog('id_shared_in_chat', uid); };
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
   const { action, token, uid: rawUid, choice, code } = req.body || {};
   try {
-    let uid;
+    let uid, sid;
+    const ipk = ipKey(req), t0 = Date.now();
     if (action === 'login') {
+      if (ipk && await rlBlocked(ipk, t0)) return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
       uid = String(rawUid || '').trim().toUpperCase();
-      if (!ID.test(uid) || !(await db.ref('players/' + uid).get()).exists())
+      if (!ID.test(uid) || !(await db.ref('players/' + uid).get()).exists()) {
+        if (ipk) await rlFail(ipk, t0);
         return res.status(404).json({ error: 'ID not found. Check it and try again.' });
+      }
     } else {
       const s = verify(token);
-      if (!s) return res.status(401).json({ error: 'Session expired. Log in again.' });
-      uid = s.uid;
+      if (!s || !s.sid) return res.status(401).json({ error: 'Session expired. Log in again.', kicked: true });
+      uid = s.uid; sid = s.sid;
     }
     const ref = db.ref('players/' + uid);
     const load = async () => (await ref.get()).val();
@@ -76,6 +84,30 @@ module.exports = async (req, res) => {
     let p = await load();
     const now = Date.now();
     const live = () => p.status === 'active' && p.current_day === day && !st.closed;
+
+    // ---- Session rules: one live session per ID, max 3 active players per network ----
+    if (!p) return res.status(401).json({ error: 'Session expired. Log in again.', kicked: true });
+    if (action === 'login') {
+      if (LOCK_DAYS.includes(day) && p.sid && p.seen && now - p.seen < LOCK_MS && p.ipk && ipk && p.ipk !== ipk) {
+        await secLog('login_refused_locked_day', uid);
+        return res.status(423).json({ error: 'This ID is being used from another network right now. Try again in a few minutes.' });
+      }
+      if (ipk && !(await ipTouch(ipk, uid, now))) {
+        await secLog('ip_limit', uid);
+        return res.status(429).json({ error: IP_MSG, ipblock: true });
+      }
+      sid = require('crypto').randomBytes(12).toString('hex');
+      const upd = { sid, seen: now };
+      if (ipk) upd.ipk = ipk;
+      if (p.sid && p.seen && now - p.seen < 10 * 60000) await secLog('previous_session_closed', uid);   // the old tab/device is signed out
+      const cc = String((req.headers || {})['x-vercel-ip-country'] || '').slice(0, 2).toUpperCase();   // country only, never the IP
+      if (cc) { if (!p.c0) upd.c0 = cc; else if (p.c0 !== cc) { upd.flag = 'new_country'; await secLog('new_country', uid); } }
+      await ref.update(upd); p = await load();
+    } else {
+      if (p.sid !== sid) return res.status(401).json({ error: 'You were signed out: this ID was opened on another device.', kicked: true });
+      if (ipk && !(await ipTouch(ipk, uid, now))) return res.status(403).json({ error: IP_MSG, ipblock: true });
+      if (!p.seen || now - p.seen > 20000) await ref.update({ seen: now });
+    }
 
     // Day 2 chat: only between the two paired players, only while Day 2 is open.
     // Messages are censored here and only the censored text is stored.
@@ -88,6 +120,7 @@ module.exports = async (req, res) => {
         if (!text) return res.status(400).json({ error: 'Write something first.' });
         if (now - (p.chat_last || 0) < 700) return res.status(429).json({ error: 'Slow down.' });
         await ref.update({ chat_last: now });
+        await flagIds(text, uid);
         await cref.push({ s: me, t: censor(text), ts: now });
       }
       const messages = [];
@@ -117,7 +150,7 @@ module.exports = async (req, res) => {
       const useEl = Number.isFinite(el) && el >= srvEl - 2500 && el <= srvEl + 300;
       const left = 60 - (useEl ? el : srvEl) / 1000;
       await ref.update({ d1_done: true, d1_left: +left.toFixed(2), d1_srv_left: +(60 - srvEl / 1000).toFixed(2) });   // kept for debugging
-      if (left >= 7 && left < 8) await ref.update({ current_day: 2 });
+      if (left >= 7 && left < 8) await ref.update({ current_day: 1.5 });
       else await ref.update({ status: 'eliminated', eliminated_day: 1 });
       p = await load();
     }
@@ -125,6 +158,10 @@ module.exports = async (req, res) => {
       const slot = (await db.ref(`pairs/day2/${p.pair}/a`).get()).val() === uid ? 'a' : 'b';
       const cref = db.ref(`pairs/day2/${p.pair}/choice_${slot}`);
       if (!(await cref.get()).exists()) await cref.set(choice);
+    }
+    if (action === 'vote15' && day === 1.5 && live() && (choice === 'continue' || choice === 'cancel')) {
+      const vref = db.ref('d15/votes/' + uid);   // one vote per survivor, locked once cast
+      if (!(await vref.get()).exists()) await vref.set(choice);
     }
     if (action === 'pick' && day === 3 && live() && Number.isInteger(choice) && choice >= 0 && choice <= 100) {
       const cref = db.ref('day3/choices/' + uid);
@@ -159,6 +196,7 @@ module.exports = async (req, res) => {
           if (!text) return res.status(400).json({ error: 'Write something first.' });
           if (now - (p.chat_last || 0) < 700) return res.status(429).json({ error: 'Slow down.' });
           await ref.update({ chat_last: now });
+          await flagIds(text, uid);
           await db.ref('chats/day5/' + p.g5).push({ s: mine, t: censor(text), ts: now });
         }
         if (action === 'vote5' && ph.state === 'vote') {
@@ -228,6 +266,15 @@ module.exports = async (req, res) => {
 
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
 
+    const day15view = async () => {
+      const mine = (await db.ref('d15/votes/' + uid).get()).val();
+      const all = (await db.ref('players').get()).val() || {};
+      const ids = Object.keys(all);
+      const survivors = ids.filter(i => all[i].status !== 'eliminated' && all[i].current_day >= 1.5).length;
+      return { screen: mine ? 'wait15' : 'pick15', survivors, initial: ids.length, value: 1,
+        pool: +(survivors * 0.95).toFixed(2), max: +(ids.length * 0.95).toFixed(2), myVote: mine || null };
+    };
+
     const day2view = async () => {
       if (!p.pair) return { screen: 'none', msg: 'Rivals not assigned yet. Come back later.' };
       if (p.pair === 'bye') { await ref.update({ current_day: 3 }); return { screen: 'passed' }; }
@@ -289,8 +336,10 @@ module.exports = async (req, res) => {
     let view;
     if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
+    else if (st.ended && p.status === 'active') view = { screen: 'ended', pct: st.ended.pct };
     else if (p.status === 'winner' || p.current_day > day) view = { screen: 'passed' };
     else if (st.closed) view = { screen: 'none', msg: 'This day is closed.' };
+    else if (day === 1.5) view = await day15view();
     else if (day === 1) view = { screen: 'day1', startAt: p.d1_start || null, now: Date.now() };
     else if (day === 2) view = await day2view();
     else if (day === 3) view = await day3view();
@@ -299,7 +348,7 @@ module.exports = async (req, res) => {
     else if (day === 6) view = day6view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
-    res.json({ token: action === 'login' ? sign(uid) : undefined, view, now: Date.now() });
+    res.json({ token: action === 'login' ? sign(uid, sid) : undefined, view, now: Date.now() });
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: 'Server error. Try again.' });
