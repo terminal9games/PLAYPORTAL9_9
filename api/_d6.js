@@ -97,9 +97,9 @@ const STEPS = [
   { id: 'e2', type: 'text', min: 8, lines: st => [GONE[st.sac[1]], echo(st)] },
 
   // ---- A person who named you (only shown if another player named this player) ----
-  { id: 'know', type: 'choice', min: 8, when: hasLink, q: (st) => 'Do you know ' + mask(st.linkId) + '?',
+  { id: 'know', type: 'choice', min: 8, secret: true, when: hasLink, q: (st) => 'Do you know ' + mask(st.linkId) + '?',
     opts: [c('yes', 'Yes'), c('no', 'No'), c('unsure', 'I am not sure')] },
-  { id: 'linkinfo', type: 'text', min: 8, when: hasLink, lines: st => [mask(st.linkId) + ' is an acquaintance of yours.', 'They are also in the tournament.'] },
+  { id: 'linkinfo', type: 'text', min: 8, secret: true, when: hasLink, lines: st => [mask(st.linkId) + ' is an acquaintance of yours.', 'They are also in the tournament.'] },
   { id: 'betray', type: 'choice', min: 12, when: hasLink, q: 'Would you betray them to win the grand prize?',
     opts: [c('yes', 'Yes. The prize is the prize.', 2), c('ifneeded', 'Only if I had no other choice.', 1), c('no', 'No. Never.', -1)] },
 
@@ -130,7 +130,7 @@ const val = (x, st) => (typeof x === 'function' ? x(st) : x);
 // What the browser receives for the current step.
 function present(st) {
   const s = STEPS[st.idx];
-  const out = { type: s.type, idx: st.idx };
+  const out = { type: s.type, idx: st.idx, secret: !!s.secret };
   if (s.type === 'text') out.lines = val(s.lines, st);
   if (s.type === 'choice') { out.q = val(s.q, st); out.opts = s.opts.map(o => ({ id: o[0], label: o[1] })); }
   if (s.type === 'input') { out.q = val(s.q, st); out.ph = s.ph || ''; }
