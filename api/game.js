@@ -1,4 +1,5 @@
 const { db, sign, verify, maintain, phase5, label5, resolveGroup5 } = require('./_lib');
+const D6 = require('./_d6');
 
 // Chat filter for Day 2. Runs on the server only, so it can't be bypassed from the browser.
 // The raw text is never stored: only the censored version reaches the database.
@@ -168,6 +169,63 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Day 6 (Sacrifices): a solo game. The script is in _d6.js; each player's progress is in d6/<uid>.
+    // The player can name an acquaintance (their ID). If that person is playing, they are asked a question
+    // about it later, and if they admit they might betray, the first player gets a secret whisper.
+    let d6 = null, cfg6 = {};
+    if (day === 6 && live()) {
+      cfg6 = (await db.ref('config/day6').get()).val() || {};
+      d6 = (await db.ref('d6/' + uid).get()).val();
+      if (d6) { d6.ans = d6.ans || {}; d6.sac = d6.sac || []; d6.kept = d6.kept || []; d6.cold = d6.cold || 0; }
+      const cap = (Number(cfg6.minutes) || 40) * 60000;
+      if (d6 && d6.start && !d6.done && now > d6.start + cap + GRACE) {   // ran out of time
+        await ref.update({ status: 'eliminated', eliminated_day: 6 });
+        p = await load(); d6 = null;
+      }
+    }
+    if (action === 'd6start' && day === 6 && live() && !d6) {
+      d6 = { start: now, idx: 0, shown: now, ans: {}, sac: [], kept: D6.ITEMS.map(i => i.id), cold: 0 };
+      await db.ref('d6/' + uid).set(d6);
+    }
+    if ((action === 'd6next' || action === 'd6ans') && day === 6 && live() && d6 && d6.start && !d6.done && req.body.idx === d6.idx) {
+      const step = D6.STEPS[d6.idx], value = req.body.value;
+      if (now < d6.shown + step.min * 1000 - 1500) return res.status(400).json({ error: 'Take a moment before you answer.' });
+      let ok = true;
+      if (step.type === 'text') ok = action === 'd6next';
+      else if (action !== 'd6ans') ok = false;
+      else if (step.type === 'choice') {
+        const o = step.opts.find(x => x[0] === value);
+        if (!o) ok = false;
+        else {
+          d6.ans[step.id] = o[0]; d6.cold += o[2] || 0;
+          if (step.id === 'betray' && d6.linkId) await db.ref(`d6links/${uid}/${d6.linkId}/betray`).set(o[0]);
+        }
+      } else if (step.type === 'input') {
+        // The answer is never confirmed or denied to the player, so this can't be used to find valid IDs.
+        const id = String(value || '').trim().toUpperCase().slice(0, 40);
+        d6.ans[step.id] = 'given';
+        if (ID.test(id) && id !== uid) {
+          d6.friendId = id;
+          if ((await db.ref('players/' + id).get()).exists()) await db.ref(`d6links/${id}/${uid}`).set({ at: now });
+        }
+      } else if (step.type === 'sacrifice') {
+        const it = D6.ITEMS.find(i => i.id === value);
+        if (it && d6.kept.includes(it.id)) { d6.kept = d6.kept.filter(x => x !== it.id); d6.sac.push(it.id); d6.cold += it.cold; }
+        else ok = false;
+      }
+      if (!ok) return res.status(400).json({ error: 'Choose one of the options.' });
+      const links = (await db.ref('d6links/' + uid).get()).val() || {};   // people who named this player
+      const ctx = { linkId: d6.linkId || Object.keys(links).sort()[0] || null };
+      if (ctx.linkId) d6.linkId = ctx.linkId;
+      const ni = D6.nextIdx(d6, d6.idx + 1, ctx);
+      if (ni < 0) { d6.done = true; d6.finished = now; } else { d6.idx = ni; d6.shown = now; }
+      await db.ref('d6/' + uid).set(d6);
+    }
+    if (day === 6 && d6 && d6.friendId && !d6.whisper) {   // the person they named admitted they might betray
+      const b = (await db.ref(`d6links/${d6.friendId}/${uid}/betray`).get()).val();
+      if (b === 'yes' || b === 'ifneeded') { d6.whisper = true; await db.ref('d6/' + uid + '/whisper').set(true); }
+    }
+
     if (action === 'ack') { await ref.child('reveal').remove(); p = await load(); }
 
     const day2view = async () => {
@@ -219,6 +277,15 @@ module.exports = async (req, res) => {
       };
     };
 
+    const day6view = () => {
+      const cap = (Number(cfg6.minutes) || 40) * 60000;
+      if (!d6 || !d6.start) return { screen: 'day6intro', minutes: cap / 60000 };
+      const whisper = d6.whisper ? 'pss, your friend may betray you' : null;
+      if (d6.done) return { screen: 'day6wait', whisper };
+      const step = D6.STEPS[d6.idx];
+      return { screen: 'day6', step: D6.present(d6), readyAt: d6.shown + step.min * 1000, endsAt: d6.start + cap, now: Date.now(), whisper };
+    };
+
     let view;
     if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
@@ -229,6 +296,7 @@ module.exports = async (req, res) => {
     else if (day === 3) view = await day3view();
     else if (day === 4) view = await day4view();
     else if (day === 5) view = await day5view();
+    else if (day === 6) view = day6view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid) : undefined, view, now: Date.now() });
