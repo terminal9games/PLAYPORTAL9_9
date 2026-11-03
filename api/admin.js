@@ -1,4 +1,4 @@
-const { admin, db, maintain, closeNow } = require('./_lib');
+const { admin, db, maintain, closeNow, newId, secLog } = require('./_lib');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
@@ -19,12 +19,17 @@ module.exports = async (req, res) => {
       const d6 = (await db.ref('d6').get()).val() || {};
       const d6cfg = (await db.ref('config/day6').get()).val() || {};
       const d6links = (await db.ref('d6links').get()).val() || {};
-      return res.json({ players: pl.val() || {}, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      const players = pl.val() || {};
+      Object.keys(players).forEach(k => { delete players[k].sid; delete players[k].ipk; });   // session internals never leave the server
+      const sec = [];
+      (await db.ref('seclog').orderByKey().limitToLast(40).get()).forEach(c => { sec.push(c.val()); });
+      return res.json({ seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
-      await db.ref('config').update({ active_day: Number(value), ends_at: Date.now() + mins * 60000, closed_day: null, duration_min: mins });
-      await db.ref('day' + Number(value)).remove(); // old test data for that day
+      await db.ref('config').update({ active_day: Number(value), ends_at: Date.now() + mins * 60000, closed_day: null, ended: null, duration_min: mins });
+      await db.ref('day' + String(Number(value)).replace('.', '_')).remove(); // old test data for that day
+      if (Number(value) === 1.5) await db.ref('d15').remove();
       if (Number(value) === 6) await Promise.all([db.ref('d6').remove(), db.ref('d6links').remove()]);
       if (Number(value) === 5) await Promise.all([db.ref('groups/day5').remove(), db.ref('chats/day5').remove(), db.ref('config/day5').remove()]);
     } else if (action === 'close') {
@@ -71,6 +76,50 @@ module.exports = async (req, res) => {
       up['config/day5'] = { start: Date.now() + lobby * 1000, discuss, vote, rounds };
       await db.ref().update(up);
       return res.json({ groups: g, players: ids.length });
+    }
+    else if (action === 'kill') {
+      // Signs out every device of this ID right away (lost or stolen device, leaked ID)
+      if (!(await pref.get()).exists()) return res.status(404).json({ error: 'not found' });
+      await pref.update({ sid: null }); await secLog('sessions_killed', String(id).toUpperCase());
+    }
+    else if (action === 'genIds') {
+      const n = Math.min(200, Math.max(1, Math.floor(Number(req.body.count)) || 1));
+      const day = Math.min(9, Math.max(1, Number(req.body.day) || 1));
+      const cur = (await db.ref('players').get()).val() || {}, made = [], up = {};
+      while (made.length < n) { const k = newId(); if (!cur[k] && !up['players/' + k]) { made.push(k); up['players/' + k] = { status: 'active', current_day: day }; } }
+      await db.ref().update(up);
+      return res.json({ ids: made });
+    }
+    else if (action === 'migrate') {
+      // Moves a player's whole progress from an exposed ID to a brand new random ID. The old ID stops working.
+      const old = String(id || '').toUpperCase();
+      const p = (await db.ref('players/' + old).get()).val();
+      if (!p) return res.status(404).json({ error: 'not found' });
+      let nid; do { nid = newId(); } while ((await db.ref('players/' + nid).get()).exists());
+      const clean = { ...p }; ['sid', 'ipk', 'seen', 'flag', 'c0'].forEach(k => delete clean[k]);
+      const up = { ['players/' + nid]: clean, ['players/' + old]: null };
+      for (const base of ['d6/', 'day3/choices/']) { const v = (await db.ref(base + old).get()).val(); if (v != null) { up[base + nid] = v; up[base + old] = null; } }
+      if (p.pair && p.pair !== 'bye') {
+        const pr = (await db.ref('pairs/day2/' + p.pair).get()).val() || {};
+        if (pr.a === old) up['pairs/day2/' + p.pair + '/a'] = nid; if (pr.b === old) up['pairs/day2/' + p.pair + '/b'] = nid;
+      }
+      if (p.g5) {
+        const g = (await db.ref('groups/day5/' + p.g5).get()).val();
+        if (g) {
+          const gp = 'groups/day5/' + p.g5 + '/';
+          if (g.members && old in g.members) { up[gp + 'members/' + nid] = g.members[old]; up[gp + 'members/' + old] = null; }
+          if (g.traitor === old) up[gp + 'traitor'] = nid;
+          if (g.out && old in g.out) { up[gp + 'out/' + nid] = g.out[old]; up[gp + 'out/' + old] = null; }
+          Object.keys(g.votes || {}).forEach(r => { if (g.votes[r] && old in g.votes[r]) { up[gp + 'votes/' + r + '/' + nid] = g.votes[r][old]; up[gp + 'votes/' + r + '/' + old] = null; } });
+        }
+      }
+      const links = (await db.ref('d6links').get()).val() || {};
+      Object.keys(links).forEach(b => { if (links[b] && old in links[b]) { up['d6links/' + b + '/' + nid] = links[b][old]; up['d6links/' + b + '/' + old] = null; } });
+      if (links[old]) { up['d6links/' + nid] = links[old]; up['d6links/' + old] = null; }
+      const vote = (await db.ref('d15/votes/' + old).get()).val(); if (vote) { up['d15/votes/' + nid] = vote; up['d15/votes/' + old] = null; }
+      await db.ref().update(up);
+      await secLog('migrated', nid);
+      return res.json({ ok: true, newId: nid });
     }
     else if (action === 'addMany') {
       // Adds many players at once. Existing IDs are left untouched.
