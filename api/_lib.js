@@ -11,8 +11,8 @@ if (!admin.apps.length) {
 const db = admin.database();
 
 const mac = s => crypto.createHmac('sha256', process.env.SESSION_SECRET).update(s).digest('base64url');
-const sign = uid => {
-  const p = Buffer.from(JSON.stringify({ uid, exp: Date.now() + 2 * 864e5 })).toString('base64url');
+const sign = (uid, sid) => {
+  const p = Buffer.from(JSON.stringify({ uid, sid, exp: Date.now() + 2 * 864e5 })).toString('base64url');
   return p + '.' + mac(p);
 };
 const verify = t => {
@@ -24,6 +24,47 @@ const verify = t => {
     return s.exp > Date.now() ? s : null;
   } catch { return null; }
 };
+
+
+// ---- Security helpers ----
+// IPs are never stored or shown: they are turned into a keyed hash that is only used for counting.
+const ACTIVE_MS = 5 * 60000, MAX_PER_IP = 3;
+const IP_MSG = 'Too many active players are currently playing from your IP address. Please ensure no more than 3 devices are connected from this network.';
+const newId = () => 'T9-' + Array.from(crypto.randomBytes(8), b => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[b % 32]).join('');
+const ipKey = req => {
+  const h = (req && req.headers) || {};
+  const raw = String(h['x-forwarded-for'] || h['x-real-ip'] || '').split(',')[0].trim();
+  return raw ? crypto.createHmac('sha256', process.env.SESSION_SECRET).update('ip:' + raw).digest('base64url').slice(0, 20) : null;
+};
+// Registers "this player is active from this network" and says whether they fit (max 3 at once).
+// The ones who connected first keep their place; the extra player is the one who is blocked.
+async function ipTouch(ipk, uid, now) {
+  const ref = db.ref('ips/' + ipk);
+  const cur = (await ref.get()).val() || {};
+  const me = cur[uid], alive = me && now - me.seen < ACTIVE_MS;
+  const mine = { seen: now, since: alive ? me.since : now };
+  const next = { ...cur, [uid]: mine };
+  const act = Object.keys(next).filter(u => now - next[u].seen < ACTIVE_MS).sort((a, b) => next[a].since - next[b].since || (a < b ? -1 : 1));
+  if (act.indexOf(uid) >= MAX_PER_IP) return false;
+  if (!alive || now - me.seen > 20000) {
+    const up = { [uid]: mine };
+    for (const u of Object.keys(cur)) if (now - cur[u].seen > 3600000) up[u] = null;   // tidy old entries
+    await ref.update(up);
+  }
+  return true;
+}
+// Failed logins: max 5 per minute per network.
+async function rlBlocked(ipk, now) {
+  const v = (await db.ref('rl/' + ipk).get()).val();
+  return !!(v && now - v.t0 < 60000 && v.n >= 5);
+}
+async function rlFail(ipk, now) {
+  await db.ref('rl/' + ipk).transaction(v => (v && now - v.t0 < 60000 ? { t0: v.t0, n: v.n + 1 } : { t0: now, n: 1 }));
+}
+// Security events for the admin panel. They hold an ID and a type, never an IP.
+async function secLog(type, uid) {
+  try { await db.ref('seclog').push({ t: Date.now(), type, uid: uid || null }); } catch (e) { console.error(e); }
+}
 
 // ---- Day 5: The Traitor ----
 // Groups of players, one secret traitor per group. Each round has a discussion (chat) and a vote.
@@ -154,6 +195,19 @@ async function closeDay(day) {
         if (ok) pass(r.id, reveal); else elim(r.id, reveal);
       }
     }
+  } else if (day === 1.5) {
+    // Squid Game vote: more than 50% of the votes cast for CANCEL ends the tournament. Nobody is eliminated.
+    // Players who did not vote do not count and move on with the rest.
+    const votes = (await db.ref('d15/votes').get()).val() || {};
+    let cont = 0, canc = 0;
+    pending.forEach(id => { if (votes[id] === 'continue') cont++; else if (votes[id] === 'cancel') canc++; });
+    const total = cont + canc, cancel = canc > cont;
+    const pctC = total ? Math.round(100 * cont / total) : 100, pctX = total ? 100 - pctC : 0;
+    for (const id of pending) {
+      if (cancel) up[`players/${id}/reveal`] = { day: 1.5, result: 'cancel', pct: pctX };
+      else { up[`players/${id}/current_day`] = 2; up[`players/${id}/reveal`] = { day: 1.5, result: 'continue', pct: pctC }; }
+    }
+    if (cancel) up['config/ended'] = { at: Date.now(), pct: pctX };
   } else if (day === 6) {
     // Ranking by the hidden "cold" score. config/day6: { cut: % of finishers to eliminate, side: 'cold' | 'warm' }
     const cfg = (await db.ref('config/day6').get()).val() || {};
@@ -188,10 +242,10 @@ async function maintain() {
   const day = c.active_day || 1;
   let closed = c.closed_day === day;
   if (!closed && c.ends_at && Date.now() > c.ends_at) closed = await closeOnce(day) || true;
-  return { day, endsAt: c.ends_at || null, closed };
+  return { day, endsAt: c.ends_at || null, closed, ended: c.ended || null };
 }
 async function closeNow() {
   const day = ((await db.ref('config/active_day').get()).val()) || 1;
   return closeOnce(day);
 }
-module.exports = { admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5 };
+module.exports = { admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
