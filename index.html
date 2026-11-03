@@ -107,6 +107,43 @@
   #t6err { min-height:16px; font-size:12px; color:var(--red); }
   #t6w { position:fixed; bottom:20px; left:0; right:0; z-index:4; text-align:center; font:italic 600 13px 'Montserrat',sans-serif; color:#b88; opacity:0; transition:opacity 3s ease; pointer-events:none; }
   #t6w.on { opacity:.9; }
+  /* day 1.5: the vote */
+  .v15 { width:min(520px,92vw); display:flex; flex-direction:column; gap:12px; align-items:center; }
+  .v15 h2 { font-size:26px; margin:0 0 4px; letter-spacing:3px; }
+  .v15row { width:100%; display:flex; justify-content:space-between; gap:12px; padding:11px 16px; font-size:14px; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.3); border-radius:10px; }
+  .v15row b { font-variant-numeric:tabular-nums; }
+  #v15p { color:var(--green); text-shadow:0 0 10px rgba(57,255,20,.5); }
+  #v15t { margin:6px 0; font-size:13px; line-height:1.6; color:#ddd; }
+  #v15err { min-height:16px; font-size:12px; color:var(--red); }
+  /* streamer mode + settings */
+  #gear { position:fixed; right:18px; bottom:18px; z-index:6; width:46px; height:46px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.04); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.4); border-radius:50%; cursor:pointer; color:#fff; }
+  #gear:hover,#gear:focus-visible { border-color:var(--cyan); outline:none; }
+  #settings { z-index:8; }
+  #settings .box { border-color:rgba(255,255,255,.5); }
+  .setrow { display:flex; align-items:center; justify-content:space-between; gap:24px; width:min(380px,80vw); font:700 16px 'Montserrat',sans-serif; }
+  #sw { flex:none; width:58px; height:32px; border-radius:32px; border:2px solid #fff; background:#000; position:relative; cursor:pointer; transition:background .2s; }
+  #sw::after { content:''; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left .2s, background .2s; }
+  #sw[aria-checked="true"] { background:#fff; }
+  #sw[aria-checked="true"]::after { left:29px; background:#000; }
+  #sw:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
+  .sethint { width:min(380px,80vw); margin:14px 0 22px; font:400 12px/1.6 'Montserrat',sans-serif; color:#bbb; }
+  body.stream .secret { filter:blur(9px); cursor:pointer; user-select:none; transition:filter .2s; }
+  body.stream .secret.show { filter:none; user-select:text; }
+  body.stream #t6w { pointer-events:auto; }
+  #streamTag { display:none; position:fixed; top:10px; left:12px; z-index:7; font:700 10px 'Montserrat',sans-serif; letter-spacing:2px; color:#fff; background:rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.5); border-radius:6px; padding:4px 8px; }
+  body.stream #streamTag { display:block; }
+  .official { position:absolute; left:20px; right:84px; bottom:18px; font:400 11px/1.5 'Montserrat',sans-serif; color:#999; text-align:left; }
+  .official b { color:#ccc; }
+  /* result overlays for day 1.5 */
+  #blue .box { border-color:#00a2ff; box-shadow:0 0 22px rgba(0,162,255,.5), inset 0 0 22px rgba(0,162,255,.2); }
+  #blue h1 { color:#00a2ff; text-shadow:0 0 18px #00a2ff; }
+  #ended .box { border-color:var(--red); box-shadow:0 0 22px rgba(255,0,85,.5), inset 0 0 22px rgba(255,0,85,.2); }
+  #ended h1 { color:var(--red); text-shadow:0 0 18px var(--red); }
+  #ended p { max-width:420px; line-height:1.6; }
+  #ipw { z-index:9; }
+  #ipw .box { border-color:#ffd400; box-shadow:0 0 22px rgba(255,212,0,.4), inset 0 0 22px rgba(255,212,0,.15); }
+  #ipw h1 { color:#ffd400; font-size:clamp(22px,5vw,32px); }
+  #ipw p { max-width:440px; line-height:1.6; }
   /* overlays */
   .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
   .ov.on { display:block; animation:in .7s ease both; }
@@ -135,6 +172,7 @@
   <h2>LOGIN</h2>
   <input id="uid" placeholder="Unique ID here" autocomplete="off" autocapitalize="characters" spellcheck="false">
   <div id="err" role="alert"></div>
+  <div class="official">Official sites: <b>terminal9.vercel.app</b> and <b>playportal9.vercel.app</b>. Never share your ID with anyone. We will never ask for it.</div>
 </section>
 
 <section id="game" class="screen">
@@ -152,12 +190,12 @@
   </div>
   <div id="d2lock" class="d2v">
     <h2>Lock your option?</h2>
-    <p>Your choice: <b id="mine"></b></p>
+    <p>Your choice: <b id="mine" class="secret"></b></p>
     <div class="row2"><button id="lockBtn" class="gbtn">Lock</button><button id="backBtn" class="rbtn">Select another one</button></div>
   </div>
   <div id="d3pick" class="d2v">
     <h2>Choose a number</h2>
-    <div id="sv" style="font:700 56px 'Montserrat',sans-serif;color:var(--cyan);text-shadow:0 0 18px var(--cyan)">50</div>
+    <div id="sv" class="secret" style="font:700 56px 'Montserrat',sans-serif;color:var(--cyan);text-shadow:0 0 18px var(--cyan)">50</div>
     <input id="slider" type="range" min="0" max="100" step="1" value="50" style="width:min(320px,80vw);padding:0;border:0;background:none;accent-color:#00f3ff">
     <button id="selBtn" class="opt">Select</button>
   </div>
@@ -189,7 +227,7 @@
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
   <div class="t5">
     <div id="t5head"><span id="t5info"></span><span id="t5clock" role="timer">--:--</span></div>
-    <div id="t5role"></div>
+    <div id="t5role" class="secret"></div>
     <div id="t5log" aria-live="polite"></div>
     <div id="t5vote"><div id="t5vtitle">Who do you expel?</div><div id="t5btns"></div></div>
     <div id="t5form"><input id="t5in" maxlength="200" placeholder="Write a message" autocomplete="off" aria-label="Message"><button id="t5send" type="button">Send</button></div>
@@ -226,7 +264,22 @@
     <p style="margin:0;font-size:15px">Your file is closed. Come back later to see the result.</p>
   </div>
 </section>
-<div id="t6w" aria-live="polite"></div>
+<div id="t6w" class="secret" aria-live="polite"></div>
+
+<section id="d15" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="v15">
+    <h2>THE VOTE</h2>
+    <div class="v15row"><span>Active survivors</span><b id="v15s">[ 0 / 0 ]</b></div>
+    <div class="v15row"><span>Value per player</span><b>$1.00 USD</b></div>
+    <div class="v15row"><span>Current prize pool (95%)</span><b id="v15p">$0.00 USD</b></div>
+    <p id="v15t"></p>
+    <div id="v15pick" class="row2"><button id="v15c" class="gbtn">CONTINUE</button><button id="v15x" class="rbtn">CANCEL GAMES</button></div>
+    <div id="v15lockrow" class="row2" style="display:none;align-items:center"><span>Lock your vote: <b id="v15m"></b></span><button id="v15lock" class="gbtn">Lock</button><button id="v15back" class="opt">Back</button></div>
+    <p id="v15w" style="display:none;font-size:14px;margin:0">Your vote is locked<span class="dots"><i>.</i><i>.</i><i>.</i></span><br>The result is shown when the day closes. Come back later.</p>
+    <div id="v15err" role="alert"></div>
+  </div>
+</section>
 
 <div id="chat" class="chat">
   <button id="chatTab" type="button" aria-expanded="false" aria-controls="chatPanel">Chat with your rival<span id="chatDot" aria-label="New messages"></span></button>
@@ -252,6 +305,34 @@
   <small>*You can not longer Login, Thank you for participating!</small>
 </div></div>
 
+<div id="blue" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>THE GAMES WILL CONTINUE</h1><p id="bluePct"></p><p>Day 2 is starting soon!</p>
+  <small>*Remember to log back in when it starts.</small>
+</div></div>
+
+<div id="ended" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>THE GAMES HAVE ENDED</h1><p id="endPct"></p>
+  <p>If you wish to participate in future events, please stay tuned and do not leave the announcement group.</p>
+</div></div>
+
+<div id="ipw" class="ov" role="alertdialog" aria-label="Too many players on your network"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>WARNING</h1><p id="ipwMsg"></p>
+  <div class="row2" style="margin-top:22px"><button id="ipwOk" class="opt">OK</button></div>
+</div></div>
+
+<div id="settings" class="ov" role="dialog" aria-label="Settings"><div class="box">
+  <h1 style="font-size:28px;margin-bottom:22px">Settings</h1>
+  <div class="setrow"><span id="swl">Stream Enable</span><button id="sw" type="button" role="switch" aria-checked="false" aria-labelledby="swl"></button></div>
+  <p class="sethint">Hides your ID, your secret role, private codes and choices on the screen you share. Tap a blurred item to read it for 3 seconds. Anything you reveal is visible on stream while it shows, so for full privacy keep the game on a screen you are not sharing.</p>
+  <button id="setClose" class="opt">Close</button>
+</div></div>
+
+<button id="gear" type="button" aria-label="Settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+<div id="streamTag">STREAM MODE</div>
+
 <div id="fs" class="ov" role="dialog" aria-label="Fullscreen recommended"><div class="box">
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
   <h1>We recommend you to play in fullscreen</h1>
@@ -265,11 +346,14 @@ let token, startLocal, raf, over = false, pick, pollT, mode = 'd2';
 
 async function call(action, extra = {}) {
   const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token, ...extra }) });
-  const d = await r.json();
+  let d; try { d = await r.json(); } catch { d = {}; }
+  if (d.ipblock) { $('ipwMsg').textContent = d.error; $('ipw').classList.add('on'); }
+  if ((d.kicked || d.ipblock) && token) { token = null; route({ screen: 'none', msg: d.error }); }   // back to the login screen
   if (!r.ok) throw d;
   return d;
 }
-function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('on')); $(id).classList.add('on'); }
+$('ipwOk').onclick = () => $('ipw').classList.remove('on');
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('on')); $(id).classList.add('on'); $('gear').style.display = id === 'login' ? 'flex' : 'none'; }
 function d2view(id) { document.querySelectorAll('.d2v').forEach(v => v.classList.toggle('on', v.id === id)); }
 function eliminated(d) { $('elimDay').textContent = 'You made it until DAY ' + d; $('elim').classList.add('on'); }
 
@@ -286,6 +370,8 @@ function route(v) {
   clearInterval(t6Clock); t6Run++;
   chatSet(v.screen === 'pick' || v.screen === 'wait');
   if (v.screen === 'eliminated') return eliminated(v.day);
+  if (v.screen === 'ended') return endedScreen(v.pct);
+  if (v.screen === 'pick15' || v.screen === 'wait15') return play15(v);
   if (v.screen === 'passed') return $('pass').classList.add('on');
   if (v.screen === 'reveal') return reveal(v);
   if (v.screen === 'day1') {
@@ -368,6 +454,47 @@ $('sendBtn').onclick = async () => {
   try { route((await call('code', { code: c })).view); } catch { $('d4err').textContent = 'Connection error. Try again.'; }
 };
 
+// ---- Streamer mode ----
+// Hides private information on screen (ID, secret role, private codes and choices). Tap a blurred item to read it for 3 s.
+let streamOn = false;
+try { streamOn = localStorage.getItem('t9_stream') === '1'; } catch {}
+function applyStream() {
+  document.body.classList.toggle('stream', streamOn);
+  $('sw').setAttribute('aria-checked', streamOn ? 'true' : 'false');
+  ['uid', 't6in', 'code'].forEach(id => { $(id).type = streamOn ? 'password' : 'text'; });
+  document.querySelectorAll('.secret').forEach(e => { e.tabIndex = streamOn ? 0 : -1; });
+}
+function revealSecret(el) { el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3000); }
+document.addEventListener('click', e => { if (!streamOn) return; const el = e.target.closest('.secret'); if (el) revealSecret(el); });
+document.addEventListener('keydown', e => { if (!streamOn || (e.key !== 'Enter' && e.key !== ' ')) return; const el = e.target.closest && e.target.closest('.secret'); if (el) { e.preventDefault(); revealSecret(el); } });
+$('gear').onclick = () => { $('settings').classList.add('on'); $('sw').focus(); };
+$('setClose').onclick = () => $('settings').classList.remove('on');
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('settings').classList.remove('on'); });
+$('sw').onclick = () => { streamOn = !streamOn; try { localStorage.setItem('t9_stream', streamOn ? '1' : '0'); } catch {} applyStream(); };
+applyStream();
+
+// ---- Day 1.5: the vote ----
+let v15Pick = null;
+const money = n => '$' + Number(n).toFixed(2) + ' USD';
+function play15(v) {
+  show('d15'); $('v15err').textContent = '';
+  $('v15s').textContent = '[ ' + v.survivors + ' / ' + v.initial + ' ]';
+  $('v15p').textContent = money(v.pool);
+  $('v15t').textContent = 'If the tournament continues, the prize pool can reach up to ' + money(v.max) + ' (95%).';
+  const locked = v.screen === 'wait15';
+  $('v15pick').style.display = locked ? 'none' : 'flex'; $('v15lockrow').style.display = 'none'; $('v15w').style.display = locked ? 'block' : 'none';
+  if (locked) pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { play15(v); } }, 30000);
+}
+const pick15 = c => { v15Pick = c; $('v15m').textContent = c === 'continue' ? 'CONTINUE' : 'CANCEL GAMES'; $('v15pick').style.display = 'none'; $('v15lockrow').style.display = 'flex'; };
+$('v15c').onclick = () => pick15('continue'); $('v15x').onclick = () => pick15('cancel');
+$('v15back').onclick = () => { $('v15lockrow').style.display = 'none'; $('v15pick').style.display = 'flex'; };
+$('v15lock').onclick = async () => {
+  $('v15lock').disabled = true;
+  try { route((await call('vote15', { choice: v15Pick })).view); } catch (x) { $('v15err').textContent = (x && x.error) || 'Connection error. Try again.'; }
+  $('v15lock').disabled = false;
+};
+function endedScreen(pct) { $('endPct').textContent = pct != null ? pct + '% voted CANCEL GAMES' : ''; $('ended').classList.add('on'); }
+
 // ---- Day 5: The Traitor ----
 // Everything (roles, votes, results) is decided on the server. The browser only draws what it receives
 // and asks again every 3 seconds. Your own role is the only secret it ever gets.
@@ -382,7 +509,7 @@ function playD5(v) {
   const lobby = v.state === 'lobby', voting = v.state === 'vote', chatOpen = v.state === 'discuss' || voting;
   $('t5info').textContent = lobby ? 'LOBBY - THE GAME STARTS SOON' : v.state === 'over' ? 'COUNTING THE VOTES' : 'ROUND ' + v.round + ' / ' + v.rounds + ' - ' + (voting ? 'VOTE' : 'DISCUSSION');
   const role = $('t5role');
-  role.className = v.role;
+  role.className = 'secret ' + v.role;
   role.textContent = v.role === 'traitor'
     ? 'You are ' + v.me + ' and you are the TRAITOR. Blend in, mislead the group and do not get expelled.'
     : 'You are ' + v.me + ' and you are CREW. One of the others is the traitor. Find them and vote them out.';
@@ -453,6 +580,7 @@ async function playD6(v) {
   const run = ++t6Run, st = v.step;
   clearInterval(t6Clock); t6Sel = null;
   show('d6'); setWhisper(v.whisper);
+  $('t6txt').classList.toggle('secret', !!st.secret); applyStream();
   $('t6txt').textContent = ''; $('t6opts').textContent = ''; $('t6err').textContent = '';
   $('t6next').style.display = $('t6ok').style.display = $('t6in').style.display = 'none';
   const end = v.endsAt - (v.now - Date.now());
@@ -555,6 +683,12 @@ $('selBtn').onclick = () => { pick = Number($('slider').value); $('mine').textCo
 $('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view(mode === 'd3' ? 'd3pick' : 'd2pick'); } };
 async function reveal(v) {
   show('d2'); d2view('d2rev');
+  if (v.day === 1.5) {
+    try { await call('ack'); } catch {}
+    if (v.result === 'cancel') return endedScreen(v.pct);
+    $('bluePct').textContent = v.pct + '% voted CONTINUE'; $('blue').classList.add('on');
+    return;
+  }
   if (v.day === 6) {
     $('r1').textContent = v.kept ? 'You kept: ' + v.kept : 'Your file is closed';
     $('r2').textContent = '';
