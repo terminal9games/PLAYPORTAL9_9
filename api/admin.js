@@ -16,24 +16,35 @@ module.exports = async (req, res) => {
       const d4 = (await db.ref('secret/day4').get()).val();
       const d5cfg = (await db.ref('config/day5').get()).val();
       const d5groups = (await db.ref('groups/day5').get()).val() || {};
-      return res.json({ players: pl.val() || {}, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      const d6 = (await db.ref('d6').get()).val() || {};
+      const d6cfg = (await db.ref('config/day6').get()).val() || {};
+      const d6links = (await db.ref('d6links').get()).val() || {};
+      return res.json({ players: pl.val() || {}, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
       await db.ref('config').update({ active_day: Number(value), ends_at: Date.now() + mins * 60000, closed_day: null, duration_min: mins });
       await db.ref('day' + Number(value)).remove(); // old test data for that day
+      if (Number(value) === 6) await Promise.all([db.ref('d6').remove(), db.ref('d6links').remove()]);
       if (Number(value) === 5) await Promise.all([db.ref('groups/day5').remove(), db.ref('chats/day5').remove(), db.ref('config/day5').remove()]);
     } else if (action === 'close') {
       return res.json({ closed: await closeNow() });
     } else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
       const p = (await pref.get()).val(); if (!p) return res.status(404).json({ error: 'not found' });
+      await db.ref('d6/' + String(id).toUpperCase()).remove();
       await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, d4_tries: null, g5: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
-    } else if (action === 'playerDay' && value >= 1 && value <= 9) await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, g5: null });
+    } else if (action === 'playerDay' && value >= 1 && value <= 9) { await db.ref('d6/' + String(id).toUpperCase()).remove(); await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, g5: null }); }
     else if (action === 'setDay4') {
       const c = String(req.body.code || '');
       if (!/^\d{4}$/.test(c)) return res.status(400).json({ error: 'code must be 4 digits' });
       const clues = (Array.isArray(req.body.clues) ? req.body.clues : []).map(x => String(x).slice(0, 200)).filter(Boolean).slice(0, 12);
       await db.ref('secret/day4').set({ code: c, clues });
+    }
+    else if (action === 'setDay6') {
+      const minutes = Math.min(120, Math.max(10, Math.floor(Number(req.body.minutes)) || 40));
+      const cut = Math.min(90, Math.max(0, Math.floor(Number(req.body.cut)) || 0));
+      const side = req.body.side === 'warm' ? 'warm' : 'cold';
+      await db.ref('config/day6').set({ minutes, cut, side });
     }
     else if (action === 'start5') {
       // Forms groups of about 4 from the active Day 5 players, picks one secret traitor per group,
