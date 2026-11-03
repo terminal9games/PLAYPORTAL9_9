@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const crypto = require('crypto');
+const D6 = require('./_d6');
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -153,6 +154,23 @@ async function closeDay(day) {
         if (ok) pass(r.id, reveal); else elim(r.id, reveal);
       }
     }
+  } else if (day === 6) {
+    // Ranking by the hidden "cold" score. config/day6: { cut: % of finishers to eliminate, side: 'cold' | 'warm' }
+    const cfg = (await db.ref('config/day6').get()).val() || {};
+    const all = (await db.ref('d6').get()).val() || {};
+    const fin = pending.filter(id => all[id] && all[id].done);
+    pending.filter(id => !fin.includes(id)).forEach(id => elim(id));   // never finished: eliminated
+    const dir = cfg.side === 'warm' ? -1 : 1;                           // default: the coldest are eliminated
+    const cut = Math.min(90, Math.max(0, Number(cfg.cut) || 40));
+    const ranked = fin.map(id => ({ id, v: dir * (all[id].cold || 0) })).sort((a, b) => b.v - a.v);
+    const nOut = Math.floor(ranked.length * cut / 100);
+    const boundary = nOut < ranked.length ? ranked[nOut].v : -Infinity;   // ties at the boundary all stay
+    ranked.forEach((r, i) => {
+      const kept = D6.itemName((all[r.id].kept || [])[0]);
+      const out = i < nOut && r.v > boundary;
+      const reveal = { day: 6, ok: !out, kept };
+      if (out) elim(r.id, reveal); else pass(r.id, reveal);
+    });
   } else pending.forEach(id => elim(id));
   if (Object.keys(up).length) await db.ref().update(up);
 }
