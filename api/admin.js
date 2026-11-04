@@ -1,5 +1,6 @@
 const { admin, db, maintain, closeNow, newId, secLog, sign, phase5, label5 } = require('./_lib');
 const D6 = require('./_d6');
+const { simulate } = require('./_sim');
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 
 // A test player plays the whole Day 6 script at random (skips the minimum reading time)
@@ -98,6 +99,16 @@ module.exports = async (req, res) => {
       up['config/day5'] = { start: Date.now() + lobby * 1000, discuss, vote, rounds };
       await db.ref().update(up);
       return res.json({ groups: g, players: ids.length });
+    }
+    else if (action === 'simulate') {
+      // Pure simulation with imaginary bots; reads nothing and writes nothing.
+      const b = req.body, days = (Array.isArray(b.days) ? b.days : []).map(Number).filter(d => d >= 1 && d <= 9);
+      if (!days.length) return res.status(400).json({ error: 'Pick at least one day.' });
+      const P = b.params || {}, o = {};
+      ['p1', 'p4', 'p7', 'cancel'].forEach(k => { if (P[k] !== '' && P[k] != null) o[k] = Math.min(1, Math.max(0, Number(P[k]) / 100)); });
+      if (P.cut6 !== '' && P.cut6 != null) o.cut6 = Number(P.cut6);
+      if (P.side6 === 'warm' || P.side6 === 'cold') o.side6 = P.side6;
+      return res.json(simulate(Number(b.bots), days, Number(b.runs), o));
     }
     else if (action === 'setTestMode') {
       await db.ref('config/test_mode').set(!!req.body.on);
