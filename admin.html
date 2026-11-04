@@ -95,6 +95,13 @@
     <div class="row"><input id="newDay" type="number" min="1" max="9" value="1" style="width:80px;margin:0" aria-label="Starting day"> starting day<button id="addBtn">Add players</button><span id="addMsg"></span></div>
   </div>
   <div class="card">
+    <h1>Test lab</h1>
+    <p style="font-size:13px;color:#bbb;margin:0 0 10px">Test players belong only to you. Each one opens in its own tab with no session or network limits, so you can play Day 5 or any group game alone. While Test mode is on, pairing, groups and day closing involve only test players, so real players are never affected.</p>
+    <label><input type="checkbox" id="tmode"> Test mode</label>
+    <div class="row"><input id="tCount" type="number" min="1" max="40" value="6" style="width:70px;margin:0" aria-label="How many"> test players on day <input id="tDay" type="number" min="1" max="9" value="1" style="width:70px;margin:0"><button id="tMake">Create</button><button id="tBots">Bots play now</button><button id="tDel">Delete all test players</button><span id="tMsg"></span></div>
+    <div id="tList" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
     <h1>Players (<span id="count">0</span>)</h1>
     <div class="tablewrap"><table>
       <thead><tr><th>ID</th><th>Status</th><th>Day</th><th>Actions</th></tr></thead>
@@ -174,9 +181,26 @@ $('genBtn').onclick = async () => {
   const r = await adm('genIds', { count: Number($('gCount').value), day: Number($('gDay').value) });
   $('genOut').value = (r.ids || []).join('\n'); load();
 };
+
+async function openAs(id) {
+  const w = window.open('about:blank', '_blank');   // opened synchronously so the pop-up blocker allows it
+  const r = await adm('impersonate', { id });
+  if (!r.token) { if (w) w.close(); return alert(r.error || 'Failed'); }
+  const url = location.origin + '/#as=' + r.token;
+  if (w) w.location.href = url; else prompt('Pop-up blocked. Copy this link into a new tab:', url);
+}
+$('tList').onclick = e => { const b = e.target.closest('button'); if (b) openAs(b.dataset.play); };
+const tmsg = t => { $('tMsg').textContent = t; setTimeout(() => $('tMsg').textContent = '', 4000); };
+$('tmode').onchange = async () => { await adm('setTestMode', { on: $('tmode').checked }); tmsg($('tmode').checked ? 'Test mode on' : 'Test mode off'); };
+$('tMake').onclick = async () => { const r = await adm('createTest', { count: Number($('tCount').value), day: Number($('tDay').value) }); tmsg(r.error || r.created + ' created'); load(); };
+$('tBots').onclick = async () => { const r = await adm('simBots'); tmsg(r.error || r.bots + ' bots played Day ' + r.day); load(); };
+$('tDel').onclick = async () => { if (!confirm('Delete ALL test players and their data? Real players are not touched.')) return; const r = await adm('deleteTest'); tmsg(r.error || r.deleted + ' deleted'); load(); };
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now, day4, day5, day6, seclog } = await adm('list');
+  const { players, activeDay, endsAt, closed, now, day4, day5, day6, seclog, testMode } = await adm('list');
+  $('tmode').checked = !!testMode;
+  const tids = Object.keys(players).filter(i => players[i].test).sort();
+  $('tList').innerHTML = tids.length ? tids.map(i => `<button data-play="${esc(i)}">${esc(i.slice(3))} (day ${esc(players[i].current_day)}, ${esc(players[i].status)})</button>`).join(' ') : 'No test players yet.';
   if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; const c6 = (day6 && day6.cfg) || {}; $('d6m').value = c6.minutes || 40; $('d6c').value = c6.cut == null ? 40 : c6.cut; $('d6s').value = c6.side || 'cold'; first = false; }
   const c5 = day5 && day5.cfg, gs = (day5 && day5.groups) || {};
   const gids = Object.keys(gs);
@@ -208,6 +232,7 @@ async function load() {
       <button data-a="eliminated" data-id="${esc(id)}">Eliminate</button>
       <button data-a="winner" data-id="${esc(id)}">Winner</button>
       <button data-a="day" data-id="${esc(id)}">Set day</button>
+      <button data-a="play" data-id="${esc(id)}">Play as</button>
       <button data-a="kill" data-id="${esc(id)}">Sign out</button>
       <button data-a="migrate" data-id="${esc(id)}">New ID</button></td></tr>`;
   }).join('');
@@ -216,6 +241,7 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 $('rows').onclick = async e => {
   const b = e.target.closest('button'); if (!b) return;
   const id = b.dataset.id, a = b.dataset.a;
+  if (a === 'play') { if (!confirm('Play as the REAL player ' + id + '? Your moves will count for them.')) return; return openAs(id); }
   if (a === 'day') {
     const d = Number(prompt('New day for ' + id + ' (1-8):'));
     if (!(d >= 1 && d <= 8)) return;
