@@ -102,6 +102,15 @@
     <div id="tList" style="margin-top:10px"></div>
   </div>
   <div class="card">
+    <h1>Simulator</h1>
+    <p style="font-size:13px;color:#bbb;margin:0 0 10px">Imaginary bots play the games many times with the real rules. Nothing is saved and no real or test player is touched. It shows how many pass and how many are eliminated each day, and which kind of player tends to win.</p>
+    <div class="row"><input id="sBots" type="number" min="2" max="5000" value="100" style="width:90px;margin:0"> bots <input id="sRuns" type="number" min="1" max="500" value="200" style="width:80px;margin:0"> runs</div>
+    <div id="sDays" class="row" style="gap:12px"></div>
+    <div class="row" style="font-size:13px">Pass rate % (skill games): Day 1 <input id="sp1" type="number" value="75" style="width:60px;margin:0"> Day 4 <input id="sp4" type="number" value="50" style="width:60px;margin:0"> Day 7+ <input id="sp7" type="number" value="50" style="width:60px;margin:0"> Cancel vote % <input id="sc" type="number" value="25" style="width:60px;margin:0"> Day 6 cut % <input id="s6" type="number" value="40" style="width:60px;margin:0"></div>
+    <div class="row"><button id="sRun">Run simulation</button><span id="sMsg"></span></div>
+    <div id="sOut" style="margin-top:10px"></div>
+  </div>
+  <div class="card">
     <h1>Players (<span id="count">0</span>)</h1>
     <div class="tablewrap"><table>
       <thead><tr><th>ID</th><th>Status</th><th>Day</th><th>Actions</th></tr></thead>
@@ -195,6 +204,19 @@ $('tmode').onchange = async () => { await adm('setTestMode', { on: $('tmode').ch
 $('tMake').onclick = async () => { const r = await adm('createTest', { count: Number($('tCount').value), day: Number($('tDay').value) }); tmsg(r.error || r.created + ' created'); load(); };
 $('tBots').onclick = async () => { const r = await adm('simBots'); tmsg(r.error || r.bots + ' bots played Day ' + r.day); load(); };
 $('tDel').onclick = async () => { if (!confirm('Delete ALL test players and their data? Real players are not touched.')) return; const r = await adm('deleteTest'); tmsg(r.error || r.deleted + ' deleted'); load(); };
+
+[1, 1.5, 2, 3, 4, 5, 6, 7, 8].forEach(d => { const l = document.createElement('label'); l.innerHTML = '<input type="checkbox" value="' + d + '"' + (d <= 6 ? ' checked' : '') + '> Day ' + d; $('sDays').appendChild(l); });
+$('sRun').onclick = async () => {
+  const days = [...$('sDays').querySelectorAll('input:checked')].map(i => Number(i.value));
+  $('sMsg').textContent = 'Running...';
+  const r = await adm('simulate', { bots: Number($('sBots').value), runs: Number($('sRuns').value), days, params: { p1: $('sp1').value, p4: $('sp4').value, p7: $('sp7').value, cancel: $('sc').value, cut6: $('s6').value } });
+  if (r.error) { $('sMsg').textContent = r.error; return; }
+  $('sMsg').textContent = '';
+  $('sOut').innerHTML = '<table><thead><tr><th>Day</th><th>Start</th><th>Pass</th><th>Eliminated</th><th>Range of passing</th></tr></thead><tbody>' +
+    r.days.map(d => `<tr><td>${esc(d.day)}</td><td>${esc(d.in)}</td><td>${esc(d.passed)}</td><td>${esc(d.eliminated)}</td><td>${esc(d.min)} - ${esc(d.max)}</td></tr>`).join('') + '</tbody></table>' +
+    `<p>Average players left at the end: <b>${esc(r.avgFinalists)}</b>. A single winner in <b>${esc(r.pctSole)}%</b> of runs, nobody left in <b>${esc(r.pctNone)}%</b>` + (r.pctCancelled ? `, games cancelled by the vote in <b>${esc(r.pctCancelled)}%</b>` : '') + '.</p>' +
+    '<p><b>Who tends to win</b> (share of the prize, %)<br>' + (r.profiles.length ? r.profiles.map(p => esc(p.name) + ': ' + esc(p.share) + '%').join('<br>') : 'Nobody survived.') + '</p>';
+};
 let first = true;
 async function load() {
   const { players, activeDay, endsAt, closed, now, day4, day5, day6, seclog, testMode } = await adm('list');
