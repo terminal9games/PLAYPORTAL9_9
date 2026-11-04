@@ -736,6 +736,23 @@ async function reveal(v) {
   $('fsGo').onclick = () => { try { Promise.resolve(req.call(el)).catch(() => {}); } catch {} $('fs').classList.remove('on'); };
   $('fsNo').onclick = () => $('fs').classList.remove('on');
 }
+
+// ---- Admin test tab ----
+// The admin panel opens this page as  /#as=<token>. The token lives only in this tab (sessionStorage),
+// so every tab can be a different test player. It is useless without the admin signing in first.
+(async () => {
+  let t = null;
+  try { const m = location.hash.match(/^#as=([\w.\-]+)/); if (m) { t = m[1]; sessionStorage.setItem('t9_as', t); history.replaceState(null, '', location.pathname); } else t = sessionStorage.getItem('t9_as'); } catch {}
+  if (!t) return;
+  let who = '?'; try { who = JSON.parse(atob(t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))).uid; } catch {}
+  token = t; $('fs').classList.remove('on');
+  document.title = 'TEST ' + who;
+  const tag = document.createElement('div');
+  tag.textContent = 'ADMIN TEST - ' + who;
+  tag.style.cssText = 'position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:99;font:700 11px Montserrat,sans-serif;letter-spacing:2px;color:#000;background:#ffd400;border-radius:6px;padding:4px 10px;pointer-events:none';
+  document.body.appendChild(tag);
+  try { route((await call('view')).view); } catch (x) { token = null; try { sessionStorage.removeItem('t9_as'); } catch {} $('err').textContent = (x && x.error) || 'Test tab expired. Open it again from the admin panel.'; }
+})();
 </script>
 </body>
 </html>
