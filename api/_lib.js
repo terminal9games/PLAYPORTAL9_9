@@ -11,8 +11,9 @@ if (!admin.apps.length) {
 const db = admin.database();
 
 const mac = s => crypto.createHmac('sha256', process.env.SESSION_SECRET).update(s).digest('base64url');
-const sign = (uid, sid) => {
-  const p = Buffer.from(JSON.stringify({ uid, sid, exp: Date.now() + 2 * 864e5 })).toString('base64url');
+const sign = (uid, sid, adm) => {
+  // adm = a token minted by the admin panel to play a test tab (6 hours); players can never get one
+  const p = Buffer.from(JSON.stringify(adm ? { uid, sid, adm: true, exp: Date.now() + 6 * 36e5 } : { uid, sid, exp: Date.now() + 2 * 864e5 })).toString('base64url');
   return p + '.' + mac(p);
 };
 const verify = t => {
@@ -155,9 +156,10 @@ async function resolveAll5(now) {
 // Closes a day: everyone who did not complete it is eliminated; days with a ranking resolve it here.
 async function closeDay(day) {
   if (day === 5) await resolveAll5(Date.now());
+  const testMode = !!(await db.ref('config/test_mode').get()).val();   // test mode: only test players take part
   const players = (await db.ref('players').get()).val() || {};
   const up = {};
-  const pending = Object.keys(players).filter(id => players[id].status === 'active' && players[id].current_day === day);
+  const pending = Object.keys(players).filter(id => players[id].status === 'active' && players[id].current_day === day && !!players[id].test === testMode);
   const elim = (id, reveal) => {
     up[`players/${id}/status`] = 'eliminated'; up[`players/${id}/eliminated_day`] = day;
     if (reveal) up[`players/${id}/reveal`] = reveal;
