@@ -63,19 +63,20 @@ module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
   const { action, token, uid: rawUid, choice, code } = req.body || {};
   try {
-    let uid, sid;
+    let uid, sid, adm = false;
     const ipk = ipKey(req), t0 = Date.now();
     if (action === 'login') {
       if (ipk && await rlBlocked(ipk, t0)) return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
       uid = String(rawUid || '').trim().toUpperCase();
-      if (!ID.test(uid) || !(await db.ref('players/' + uid).get()).exists()) {
+      const pl0 = ID.test(uid) ? (await db.ref('players/' + uid).get()).val() : null;
+      if (!pl0 || pl0.test) {   // test players can only be played from the admin panel
         if (ipk) await rlFail(ipk, t0);
         return res.status(404).json({ error: 'ID not found. Check it and try again.' });
       }
     } else {
       const s = verify(token);
       if (!s || !s.sid) return res.status(401).json({ error: 'Session expired. Log in again.', kicked: true });
-      uid = s.uid; sid = s.sid;
+      uid = s.uid; sid = s.sid; adm = !!s.adm;
     }
     const ref = db.ref('players/' + uid);
     const load = async () => (await ref.get()).val();
@@ -103,7 +104,7 @@ module.exports = async (req, res) => {
       const cc = String((req.headers || {})['x-vercel-ip-country'] || '').slice(0, 2).toUpperCase();   // country only, never the IP
       if (cc) { if (!p.c0) upd.c0 = cc; else if (p.c0 !== cc) { upd.flag = 'new_country'; await secLog('new_country', uid); } }
       await ref.update(upd); p = await load();
-    } else {
+    } else if (!adm) {   // admin test tabs skip the session and network rules
       if (p.sid !== sid) return res.status(401).json({ error: 'You were signed out: this ID was opened on another device.', kicked: true });
       if (ipk && !(await ipTouch(ipk, uid, now))) return res.status(403).json({ error: IP_MSG, ipblock: true });
       if (!p.seen || now - p.seen > 20000) await ref.update({ seen: now });
@@ -270,9 +271,10 @@ module.exports = async (req, res) => {
       const mine = (await db.ref('d15/votes/' + uid).get()).val();
       const all = (await db.ref('players').get()).val() || {};
       const ids = Object.keys(all);
-      const survivors = ids.filter(i => all[i].status !== 'eliminated' && all[i].current_day >= 1.5).length;
-      return { screen: mine ? 'wait15' : 'pick15', survivors, initial: ids.length, value: 1,
-        pool: +(survivors * 0.95).toFixed(2), max: +(ids.length * 0.95).toFixed(2), myVote: mine || null };
+      const mates = ids.filter(i => !!all[i].test === !!p.test);   // test players only count test players
+      const survivors = mates.filter(i => all[i].status !== 'eliminated' && all[i].current_day >= 1.5).length;
+      return { screen: mine ? 'wait15' : 'pick15', survivors, initial: mates.length, value: 1,
+        pool: +(survivors * 0.95).toFixed(2), max: +(mates.length * 0.95).toFixed(2), myVote: mine || null };
     };
 
     const day2view = async () => {
