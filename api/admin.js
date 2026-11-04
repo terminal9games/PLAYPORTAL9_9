@@ -1,4 +1,24 @@
-const { admin, db, maintain, closeNow, newId, secLog } = require('./_lib');
+const { admin, db, maintain, closeNow, newId, secLog, sign, phase5, label5 } = require('./_lib');
+const D6 = require('./_d6');
+const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
+
+// A test player plays the whole Day 6 script at random (skips the minimum reading time)
+async function botPlay6(db, u, now) {
+  const st = (await db.ref('d6/' + u).get()).val() || { start: now, idx: 0, shown: now, cold: 0 };
+  st.ans = st.ans || {}; st.sac = st.sac || []; st.kept = st.kept || D6.ITEMS.map(i => i.id); st.cold = st.cold || 0;
+  if (st.done) return;
+  const links = (await db.ref('d6links/' + u).get()).val() || {};
+  for (let g = 0; !st.done && g < 80; g++) {
+    const step = D6.STEPS[st.idx], ctx = { linkId: st.linkId || Object.keys(links).sort()[0] || null };
+    if (ctx.linkId) st.linkId = ctx.linkId;
+    if (step.type === 'choice') { const o = rnd(step.opts); st.ans[step.id] = o[0]; st.cold += o[2] || 0; if (step.id === 'betray' && st.linkId) await db.ref(`d6links/${u}/${st.linkId}/betray`).set(o[0]); }
+    else if (step.type === 'sacrifice') { const id = rnd(st.kept), it = D6.ITEMS.find(i => i.id === id); st.kept = st.kept.filter(x => x !== id); st.sac.push(id); st.cold += it.cold; }
+    else if (step.type === 'input') st.ans[step.id] = 'skipped';
+    const ni = D6.nextIdx(st, st.idx + 1, ctx);
+    if (ni < 0) { st.done = true; st.finished = now; } else { st.idx = ni; st.shown = now; }
+  }
+  await db.ref('d6/' + u).set(st);
+}
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') return res.status(405).end();
@@ -19,11 +39,12 @@ module.exports = async (req, res) => {
       const d6 = (await db.ref('d6').get()).val() || {};
       const d6cfg = (await db.ref('config/day6').get()).val() || {};
       const d6links = (await db.ref('d6links').get()).val() || {};
+      const testMode = !!(await db.ref('config/test_mode').get()).val();
       const players = pl.val() || {};
       Object.keys(players).forEach(k => { delete players[k].sid; delete players[k].ipk; });   // session internals never leave the server
       const sec = [];
       (await db.ref('seclog').orderByKey().limitToLast(40).get()).forEach(c => { sec.push(c.val()); });
-      return res.json({ seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
@@ -58,7 +79,8 @@ module.exports = async (req, res) => {
       const discuss = num(req.body.discuss, 8, 1, 30), vote = num(req.body.vote, 2, 1, 10);
       const rounds = num(req.body.rounds, 3, 1, 6), lobby = num(req.body.lobby, 120, 10, 900);
       const s = (await db.ref('players').get()).val() || {};
-      const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === 5);
+      const tm = !!(await db.ref('config/test_mode').get()).val();
+      const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === 5 && !!s[i].test === tm);
       if (ids.length < 3) return res.status(400).json({ error: 'Need at least 3 active players on Day 5 (there are ' + ids.length + ').' });
       const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
       shuffle(ids);
@@ -76,6 +98,78 @@ module.exports = async (req, res) => {
       up['config/day5'] = { start: Date.now() + lobby * 1000, discuss, vote, rounds };
       await db.ref().update(up);
       return res.json({ groups: g, players: ids.length });
+    }
+    else if (action === 'setTestMode') {
+      await db.ref('config/test_mode').set(!!req.body.on);
+    }
+    else if (action === 'createTest') {
+      const n = Math.min(40, Math.max(1, Math.floor(Number(req.body.count)) || 1));
+      const day = Math.min(9, Math.max(1, Number(req.body.day) || 1));
+      const cur = (await db.ref('players').get()).val() || {};
+      let k = Object.keys(cur).filter(i => cur[i].test).length;
+      const up = {}; let made = 0;
+      while (made < n) { k++; const nid = 'T9-TEST' + String(k).padStart(4, '0'); if (cur[nid] || up['players/' + nid]) continue; up['players/' + nid] = { status: 'active', current_day: day, test: true }; made++; }
+      await db.ref().update(up);
+      return res.json({ created: made });
+    }
+    else if (action === 'deleteTest') {
+      // Removes every test player and everything they left behind. Real players are never touched.
+      const cur = (await db.ref('players').get()).val() || {};
+      const tests = Object.keys(cur).filter(i => cur[i].test), set = new Set(tests);
+      const up = {};
+      for (const u of tests) { up['players/' + u] = null; up['d6/' + u] = null; up['d15/votes/' + u] = null; up['day3/choices/' + u] = null; up['d6links/' + u] = null; }
+      const links = (await db.ref('d6links').get()).val() || {};
+      Object.keys(links).forEach(b => Object.keys(links[b] || {}).forEach(x => { if (set.has(x)) up['d6links/' + b + '/' + x] = null; }));
+      const groups = (await db.ref('groups/day5').get()).val() || {};
+      Object.keys(groups).forEach(g => { if (set.has(groups[g].traitor)) { up['groups/day5/' + g] = null; up['chats/day5/' + g] = null; } });
+      const pairs = (await db.ref('pairs/day2').get()).val() || {};
+      Object.keys(pairs).forEach(p => { if (set.has(pairs[p].a)) up['pairs/day2/' + p] = null; });
+      if (tests.length) await db.ref().update(up);
+      return res.json({ deleted: tests.length });
+    }
+    else if (action === 'impersonate') {
+      // A 6-hour token for one tab. It skips sessions and network limits, so you can keep many tabs open.
+      const who = String(id || '').toUpperCase();
+      if (!(await db.ref('players/' + who).get()).exists()) return res.status(404).json({ error: 'not found' });
+      await secLog('admin_play_as', who);
+      return res.json({ token: sign(who, 'adm', true) });
+    }
+    else if (action === 'simBots') {
+      // Test players answer for you in the current day, so you can see a full round with many players
+      const st = await maintain(), day = st.day, now = Date.now();
+      const all = (await db.ref('players').get()).val() || {};
+      const bots = Object.keys(all).filter(i => all[i].test && all[i].status === 'active' && all[i].current_day === day);
+      if (!bots.length) return res.status(400).json({ error: 'There are no active test players on Day ' + day + '.' });
+      const up = {}; let n = 0;
+      if (day === 1.5) {
+        const v = (await db.ref('d15/votes').get()).val() || {};
+        bots.filter(b => !v[b]).forEach(b => { up['d15/votes/' + b] = Math.random() < 0.7 ? 'continue' : 'cancel'; n++; });
+      } else if (day === 2) {
+        const pr = (await db.ref('pairs/day2').get()).val() || {};
+        bots.forEach(b => { const p = pr[all[b].pair]; if (!p) return; const slot = p.a === b ? 'a' : 'b'; if (!p['choice_' + slot]) { up[`pairs/day2/${all[b].pair}/choice_${slot}`] = rnd(['share', 'steal']); n++; } });
+      } else if (day === 3) {
+        const c = (await db.ref('day3/choices').get()).val() || {};
+        bots.filter(b => typeof c[b] !== 'number').forEach(b => { up['day3/choices/' + b] = Math.floor(Math.random() * 101); n++; });
+      } else if (day === 5) {
+        const cfg = (await db.ref('config/day5').get()).val();
+        if (!cfg || !cfg.start) return res.status(400).json({ error: 'Press "Create groups and start" first.' });
+        const ph = phase5(cfg, now);
+        if (ph.state !== 'discuss' && ph.state !== 'vote') return res.status(400).json({ error: 'Day 5 is in the lobby or finished. Bots play during discussion and voting.' });
+        const groups = (await db.ref('groups/day5').get()).val() || {};
+        const talk = ['I am not the traitor.', 'Who has been quiet?', 'Something feels off about one of you.', 'Let us not vote the wrong person.', 'I vote with the majority.'];
+        for (const gid of Object.keys(groups)) {
+          const g = groups[gid]; if (g.result) continue;
+          const alive = Object.keys(g.members).filter(u => !(g.out && u in g.out));
+          for (const b of alive.filter(u => all[u] && all[u].test)) {
+            await db.ref('chats/day5/' + gid).push({ s: g.members[b], t: rnd(talk), ts: now }); n++;
+            if (ph.state === 'vote') { const others = alive.filter(u => u !== b); if (others.length) up[`groups/day5/${gid}/votes/r${ph.round}/${b}`] = g.members[rnd(others)]; }
+          }
+        }
+      } else if (day === 6) {
+        for (const b of bots) { await botPlay6(db, b, now); n++; }
+      } else return res.status(400).json({ error: 'Bots do not play Day ' + day + '. Play it yourself in a test tab.' });
+      if (Object.keys(up).length) await db.ref().update(up);
+      return res.json({ bots: n, day });
     }
     else if (action === 'kill') {
       // Signs out every device of this ID right away (lost or stolen device, leaked ID)
@@ -142,7 +236,8 @@ module.exports = async (req, res) => {
     } else if (action === 'pair') {
       const d = Number(value);
       const s = (await db.ref('players').get()).val() || {};
-      const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === d);
+      const tm = !!(await db.ref('config/test_mode').get()).val();
+      const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === d && !!s[i].test === tm);
       for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
       await db.ref('pairs/day' + d).remove();
       const up = {};
