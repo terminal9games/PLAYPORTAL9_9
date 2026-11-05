@@ -1,6 +1,7 @@
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 const D6 = require('./_d6');
+const D7 = require('./_d7');
 
 if (!admin.apps.length) {
   admin.initializeApp({
@@ -227,6 +228,16 @@ async function closeDay(day) {
       const reveal = { day: 6, ok: !out, kept };
       if (out) elim(r.id, reveal); else pass(r.id, reveal);
     });
+  } else if (day === 7) {
+    // Finishers are ranked by total time, everyone else by progress. The slowest cut% are eliminated;
+    // nobody who never moved can pass.
+    const cfg = D7.cfg((await db.ref('config/day7').get()).val());
+    const all = (await db.ref('d7').get()).val() || {};
+    const order = D7.rank(players, all, pending);
+    const started = order.filter(id => all[id] && (all[id].done || all[id].prog > 0));
+    const nOut = Math.floor(started.length * cfg.cut / 100);
+    const keep = new Set(started.slice(0, started.length - nOut));
+    order.forEach(id => { const ok = keep.has(id), reveal = { day: 7, ok, finished: !!(all[id] && all[id].done) }; if (ok) pass(id, reveal); else elim(id, reveal); });
   } else pending.forEach(id => elim(id));
   if (Object.keys(up).length) await db.ref().update(up);
 }
