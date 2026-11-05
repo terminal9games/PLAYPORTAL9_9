@@ -7,7 +7,7 @@ const gauss = () => { let s = 0; for (let i = 0; i < 6; i++) s += rnd(); return 
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 // Default knobs. Days 1, 4 and 7+ depend on player skill, so the admin sets the base pass rate.
-const DEFAULTS = { p1: 0.75, p4: 0.5, p7: 0.5, cancel: 0.25, cut6: 40, side6: 'cold', group5: 4, rounds5: 3 };
+const DEFAULTS = { p1: 0.75, p4: 0.5, p7: 0.5, cancel: 0.25, cut6: 40, cut7: 40, side6: 'cold', group5: 4, rounds5: 3 };
 
 function runOnce(n, days, k) {
   const bots = Array.from({ length: n }, (_, i) => ({
@@ -69,7 +69,12 @@ function runOnce(n, days, k) {
       const rk = alive.map(b => ({ b, v: dir * (b.cold + gauss()) })).sort((p, q) => q.v - p.v);
       const nOut = Math.floor(rk.length * cut / 100), boundary = nOut < rk.length ? rk[nOut].v : -Infinity;
       pass = rk.filter((r, i) => !(i < nOut && r.v > boundary)).map(r => r.b);
-    } else pass = alive.filter(b => rnd() < clamp(k.p7 * (0.55 + 0.9 * b.skill), 0, 1));   // Day 7 and later
+    } else if (day === 7) {
+      // Dark Maze + Tightrope: a ranking by speed and nerve. The slowest cut% go out.
+      const rk = alive.map(b => ({ b, v: 0.6 * b.skill + 0.25 * (1 - b.sus) + 0.15 * (1 - b.greed) + 0.35 * gauss() * 0.5 })).sort((p, q) => q.v - p.v);
+      const nOut = Math.floor(rk.length * clamp(k.cut7, 0, 90) / 100);
+      pass = rk.slice(0, rk.length - nOut).map(r => r.b);
+    } else pass = alive.filter(b => rnd() < clamp(k.p7 * (0.55 + 0.9 * b.skill), 0, 1));   // Day 8 and later
     log.push({ day, inn, pass: pass.length });
     alive = pass;
     if (ended) break;
