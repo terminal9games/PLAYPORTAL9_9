@@ -95,6 +95,13 @@
     <div class="row"><input id="newDay" type="number" min="1" max="9" value="1" style="width:80px;margin:0" aria-label="Starting day"> starting day<button id="addBtn">Add players</button><span id="addMsg"></span></div>
   </div>
   <div class="card">
+    <h1>Day 7 - Dark Maze + Tightrope</h1>
+    <p style="font-size:13px;color:#bbb;margin:0 0 10px">One continuous hour. Players cross mazes in the dark with a chaser behind them, then cross a rope in the wind. Finishers are ranked by total time, the rest by progress. The slowest players are eliminated; anyone who never moved is out.</p>
+    <div class="row" style="font-size:13px"><input id="d7m" type="number" min="5" max="180" value="60" style="width:70px;margin:0"> minutes <input id="d7l" type="number" min="1" max="6" value="3" style="width:60px;margin:0"> mazes <input id="d7s" type="number" min="21" max="121" value="71" style="width:70px;margin:0"> maze size <input id="d7g" type="number" min="1" max="10" value="5" style="width:60px;margin:0"> rope segments <input id="d7c" type="number" min="0" max="90" value="40" style="width:60px;margin:0"> % eliminated</div>
+    <div class="row"><label style="font-size:13px"><input type="checkbox" id="d7n"> New mazes (only before the day starts)</label><button id="d7save">Save</button><span id="d7msg2"></span></div>
+    <div id="d7info" style="font-size:13px;margin-top:8px"></div>
+  </div>
+  <div class="card">
     <h1>Test lab</h1>
     <p style="font-size:13px;color:#bbb;margin:0 0 10px">Test players belong only to you. Each one opens in its own tab with no session or network limits, so you can play Day 5 or any group game alone. While Test mode is on, pairing, groups and day closing involve only test players, so real players are never affected.</p>
     <label><input type="checkbox" id="tmode"> Test mode</label>
@@ -106,7 +113,7 @@
     <p style="font-size:13px;color:#bbb;margin:0 0 10px">Imaginary bots play the games many times with the real rules. Nothing is saved and no real or test player is touched. It shows how many pass and how many are eliminated each day, and which kind of player tends to win.</p>
     <div class="row"><input id="sBots" type="number" min="2" max="5000" value="100" style="width:90px;margin:0"> bots <input id="sRuns" type="number" min="1" max="500" value="200" style="width:80px;margin:0"> runs</div>
     <div id="sDays" class="row" style="gap:12px"></div>
-    <div class="row" style="font-size:13px">Pass rate % (skill games): Day 1 <input id="sp1" type="number" value="75" style="width:60px;margin:0"> Day 4 <input id="sp4" type="number" value="50" style="width:60px;margin:0"> Day 7+ <input id="sp7" type="number" value="50" style="width:60px;margin:0"> Cancel vote % <input id="sc" type="number" value="25" style="width:60px;margin:0"> Day 6 cut % <input id="s6" type="number" value="40" style="width:60px;margin:0"></div>
+    <div class="row" style="font-size:13px">Pass rate % (skill games): Day 1 <input id="sp1" type="number" value="75" style="width:60px;margin:0"> Day 4 <input id="sp4" type="number" value="50" style="width:60px;margin:0"> Day 8+ <input id="sp7" type="number" value="50" style="width:60px;margin:0"> Cancel vote % <input id="sc" type="number" value="25" style="width:60px;margin:0"> Day 6 cut % <input id="s6" type="number" value="40" style="width:60px;margin:0"> Day 7 cut % <input id="s7c" type="number" value="40" style="width:60px;margin:0"></div>
     <div class="row"><button id="sRun">Run simulation</button><span id="sMsg"></span></div>
     <div id="sOut" style="margin-top:10px"></div>
   </div>
@@ -209,7 +216,7 @@ $('tDel').onclick = async () => { if (!confirm('Delete ALL test players and thei
 $('sRun').onclick = async () => {
   const days = [...$('sDays').querySelectorAll('input:checked')].map(i => Number(i.value));
   $('sMsg').textContent = 'Running...';
-  const r = await adm('simulate', { bots: Number($('sBots').value), runs: Number($('sRuns').value), days, params: { p1: $('sp1').value, p4: $('sp4').value, p7: $('sp7').value, cancel: $('sc').value, cut6: $('s6').value } });
+  const r = await adm('simulate', { bots: Number($('sBots').value), runs: Number($('sRuns').value), days, params: { p1: $('sp1').value, p4: $('sp4').value, p7: $('sp7').value, cancel: $('sc').value, cut6: $('s6').value, cut7: $('s7c').value } });
   if (r.error) { $('sMsg').textContent = r.error; return; }
   $('sMsg').textContent = '';
   $('sOut').innerHTML = '<table><thead><tr><th>Day</th><th>Start</th><th>Pass</th><th>Eliminated</th><th>Range of passing</th></tr></thead><tbody>' +
@@ -217,13 +224,25 @@ $('sRun').onclick = async () => {
     `<p>Average players left at the end: <b>${esc(r.avgFinalists)}</b>. A single winner in <b>${esc(r.pctSole)}%</b> of runs, nobody left in <b>${esc(r.pctNone)}%</b>` + (r.pctCancelled ? `, games cancelled by the vote in <b>${esc(r.pctCancelled)}%</b>` : '') + '.</p>' +
     '<p><b>Who tends to win</b> (share of the prize, %)<br>' + (r.profiles.length ? r.profiles.map(p => esc(p.name) + ': ' + esc(p.share) + '%').join('<br>') : 'Nobody survived.') + '</p>';
 };
+
+$('d7save').onclick = async () => {
+  if ($('d7n').checked && !confirm('New mazes for everyone. Do this only before anyone starts Day 7. Continue?')) return;
+  const r = await adm('setDay7', { minutes: Number($('d7m').value), levels: Number($('d7l').value), size: Number($('d7s').value), segs: Number($('d7g').value), cut: Number($('d7c').value), newSeed: $('d7n').checked });
+  $('d7n').checked = false; $('d7msg2').textContent = r.error || 'Saved'; setTimeout(() => $('d7msg2').textContent = '', 3000);
+};
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now, day4, day5, day6, seclog, testMode } = await adm('list');
+  const { players, activeDay, endsAt, closed, now, day4, day5, day6, day7, seclog, testMode } = await adm('list');
   $('tmode').checked = !!testMode;
   const tids = Object.keys(players).filter(i => players[i].test).sort();
   $('tList').innerHTML = tids.length ? tids.map(i => `<button data-play="${esc(i)}">${esc(i.slice(3))} (day ${esc(players[i].current_day)}, ${esc(players[i].status)})</button>`).join(' ') : 'No test players yet.';
   if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; const c6 = (day6 && day6.cfg) || {}; $('d6m').value = c6.minutes || 40; $('d6c').value = c6.cut == null ? 40 : c6.cut; $('d6s').value = c6.side || 'cold'; first = false; }
+  if (day7) {
+    const c7 = day7.cfg, d7 = day7.data || {}, ids7 = Object.keys(d7).sort((a, b) => ((d7[b].done ? 1e3 - d7[b].total / 6e7 : d7[b].prog || 0)) - ((d7[a].done ? 1e3 - d7[a].total / 6e7 : d7[a].prog || 0)));
+    if (first) { $('d7m').value = c7.minutes; $('d7l').value = c7.levels; $('d7s').value = c7.size; $('d7g').value = c7.segs; $('d7c').value = c7.cut; }
+    $('d7info').innerHTML = !ids7.length ? 'Nobody has started Day 7 yet.' :
+      '<b>' + day7.done + ' finished</b> / ' + ids7.length + ' started<br>' + ids7.slice(0, 40).map(u => esc(u) + ': ' + (d7[u].done ? 'finished in ' + Math.floor(d7[u].total / 60000) + 'm ' + Math.floor(d7[u].total / 1000) % 60 + 's' : 'progress ' + Math.round(100 * (d7[u].prog || 0) / day7.units) + '%') + ', caught ' + esc(d7[u].caught || 0) + ', falls ' + esc(d7[u].falls || 0)).join('<br>');
+  }
   const c5 = day5 && day5.cfg, gs = (day5 && day5.groups) || {};
   const gids = Object.keys(gs);
   $('g5info').innerHTML = !c5 || !gids.length ? 'No groups yet.' :
