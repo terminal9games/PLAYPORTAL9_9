@@ -1,5 +1,6 @@
 const { admin, db, maintain, closeNow, newId, secLog, sign, phase5, label5 } = require('./_lib');
 const D6 = require('./_d6');
+const D7 = require('./_d7');
 const { simulate } = require('./_sim');
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 
@@ -40,12 +41,15 @@ module.exports = async (req, res) => {
       const d6 = (await db.ref('d6').get()).val() || {};
       const d6cfg = (await db.ref('config/day6').get()).val() || {};
       const d6links = (await db.ref('d6links').get()).val() || {};
+      const d7 = (await db.ref('d7').get()).val() || {};
+      const d7cfg = D7.cfg((await db.ref('config/day7').get()).val());
+      const d7done = (await db.ref('d7meta/done').get()).val() || 0;
       const testMode = !!(await db.ref('config/test_mode').get()).val();
       const players = pl.val() || {};
       Object.keys(players).forEach(k => { delete players[k].sid; delete players[k].ipk; });   // session internals never leave the server
       const sec = [];
       (await db.ref('seclog').orderByKey().limitToLast(40).get()).forEach(c => { sec.push(c.val()); });
-      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, day7: { cfg: d7cfg, data: d7, done: d7done, units: D7.units(d7cfg) }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
@@ -72,6 +76,13 @@ module.exports = async (req, res) => {
       const cut = Math.min(90, Math.max(0, Math.floor(Number(req.body.cut)) || 0));
       const side = req.body.side === 'warm' ? 'warm' : 'cold';
       await db.ref('config/day6').set({ minutes, cut, side });
+    }
+    else if (action === 'setDay7') {
+      // seed: a new random seed gives every player brand new mazes (use it before the day starts, never during)
+      const b = req.body, cur = D7.cfg((await db.ref('config/day7').get()).val());
+      const next = D7.cfg({ minutes: b.minutes, levels: b.levels, size: b.size, segs: b.segs, cut: b.cut, seed: b.newSeed ? Math.random().toString(36).slice(2, 10) : cur.seed });
+      await db.ref('config/day7').set(next);
+      return res.json({ cfg: next });
     }
     else if (action === 'start5') {
       // Forms groups of about 4 from the active Day 5 players, picks one secret traitor per group,
@@ -107,6 +118,7 @@ module.exports = async (req, res) => {
       const P = b.params || {}, o = {};
       ['p1', 'p4', 'p7', 'cancel'].forEach(k => { if (P[k] !== '' && P[k] != null) o[k] = Math.min(1, Math.max(0, Number(P[k]) / 100)); });
       if (P.cut6 !== '' && P.cut6 != null) o.cut6 = Number(P.cut6);
+      if (P.cut7 !== '' && P.cut7 != null) o.cut7 = Number(P.cut7);
       if (P.side6 === 'warm' || P.side6 === 'cold') o.side6 = P.side6;
       return res.json(simulate(Number(b.bots), days, Number(b.runs), o));
     }
@@ -128,14 +140,18 @@ module.exports = async (req, res) => {
       const cur = (await db.ref('players').get()).val() || {};
       const tests = Object.keys(cur).filter(i => cur[i].test), set = new Set(tests);
       const up = {};
-      for (const u of tests) { up['players/' + u] = null; up['d6/' + u] = null; up['d15/votes/' + u] = null; up['day3/choices/' + u] = null; up['d6links/' + u] = null; }
+      for (const u of tests) { up['players/' + u] = null; up['d6/' + u] = null; up['d15/votes/' + u] = null; up['day3/choices/' + u] = null; up['d6links/' + u] = null; up['d7/' + u] = null; for (let l = 0; l < 6; l++) up['d7trace/L' + l + '/' + u] = null; }
       const links = (await db.ref('d6links').get()).val() || {};
       Object.keys(links).forEach(b => Object.keys(links[b] || {}).forEach(x => { if (set.has(x)) up['d6links/' + b + '/' + x] = null; }));
       const groups = (await db.ref('groups/day5').get()).val() || {};
       Object.keys(groups).forEach(g => { if (set.has(groups[g].traitor)) { up['groups/day5/' + g] = null; up['chats/day5/' + g] = null; } });
       const pairs = (await db.ref('pairs/day2').get()).val() || {};
       Object.keys(pairs).forEach(p => { if (set.has(pairs[p].a)) up['pairs/day2/' + p] = null; });
-      if (tests.length) await db.ref().update(up);
+      if (tests.length) {
+        await db.ref().update(up);
+        const d7 = (await db.ref('d7').get()).val() || {};
+        await db.ref('d7meta/done').set(Object.keys(d7).filter(u => d7[u].done).length);   // the "escaped" counter forgets the test players
+      }
       return res.json({ deleted: tests.length });
     }
     else if (action === 'impersonate') {
@@ -178,6 +194,18 @@ module.exports = async (req, res) => {
         }
       } else if (day === 6) {
         for (const b of bots) { await botPlay6(db, b, now); n++; }
+      } else if (day === 7) {
+        // Bots "play" the hour: some finish with a random time, others stop part-way
+        const c7 = D7.cfg((await db.ref('config/day7').get()).val()), cur = (await db.ref('d7').get()).val() || {};
+        for (const b of bots) {
+          if (cur[b] && cur[b].done) continue;
+          const start = now - Math.floor((15 + Math.random() * 40) * 60000);
+          const finishes = Math.random() < 0.6, tot = D7.units(c7);
+          const s = { start, stage: finishes ? 'rope' : 'maze', level: c7.levels, lvlStart: start, caught: Math.floor(Math.random() * 8), falls: Math.floor(Math.random() * 12), cp: 0 };
+          if (finishes) { s.done = true; s.finished = now; s.total = now - start; s.prog = tot; await db.ref('d7meta/done').transaction(x => (x || 0) + 1); }
+          else s.prog = Math.random() * (tot - 1);
+          await db.ref('d7/' + b).set(s); n++;
+        }
       } else return res.status(400).json({ error: 'Bots do not play Day ' + day + '. Play it yourself in a test tab.' });
       if (Object.keys(up).length) await db.ref().update(up);
       return res.json({ bots: n, day });
