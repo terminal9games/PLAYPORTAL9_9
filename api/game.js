@@ -1,5 +1,6 @@
 const { db, sign, verify, maintain, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, IP_MSG } = require('./_lib');
 const D6 = require('./_d6');
+const D7 = require('./_d7');
 
 // Chat filter for Day 2. Runs on the server only, so it can't be bypassed from the browser.
 // The raw text is never stored: only the censored version reaches the database.
@@ -326,6 +327,51 @@ module.exports = async (req, res) => {
       };
     };
 
+    // Day 7 (Dark Maze + Tightrope): one continuous hour. The server owns the clock and checks that nobody
+    // is faster than possible; the browser only draws. Progress is saved so a reload resumes where you were.
+    let d7 = null, cfg7 = D7.cfg(null), d7over = false;
+    if (day === 7 && live()) {
+      cfg7 = D7.cfg((await db.ref('config/day7').get()).val());
+      d7 = (await db.ref('d7/' + uid).get()).val();
+      d7over = !!(d7 && d7.start && !d7.done && now > d7.start + cfg7.minutes * 60000 + GRACE);
+    }
+    if (action === 'd7start' && day === 7 && live() && !d7) {
+      d7 = { start: now, stage: 'maze', level: 0, lvlStart: now, prog: 0, caught: 0, falls: 0, cp: 0 };
+      await db.ref('d7/' + uid).set(d7);
+    }
+    if (day === 7 && live() && d7 && d7.start && !d7.done && !d7over) {
+      const finish = async () => {
+        d7.done = true; d7.finished = now; d7.total = now - d7.start; d7.prog = D7.units(cfg7);
+        await db.ref('d7meta/done').transaction(x => (x || 0) + 1);
+      };
+      if (action === 'd7level' && d7.stage === 'maze' && req.body.level === d7.level) {
+        if (now - d7.lvlStart < D7.level(cfg7, d7.level).minMs) return res.status(400).json({ error: 'Too fast.' });
+        d7.level++; d7.lvlStart = now; d7.cp = 0; d7.prog = d7.level;
+        if (d7.level >= cfg7.levels) { d7.stage = 'rope'; d7.seg = 0; }
+        await db.ref('d7/' + uid).set(d7);
+      } else if (action === 'd7seg' && d7.stage === 'rope' && req.body.seg === d7.seg) {
+        if (now - d7.lvlStart < D7.rope(cfg7, d7.seg).minMs) return res.status(400).json({ error: 'Too fast.' });
+        d7.seg++; d7.lvlStart = now; d7.prog = cfg7.levels + d7.seg;
+        if (d7.seg >= cfg7.segs) await finish();
+        await db.ref('d7/' + uid).set(d7);
+      } else if (action === 'd7ping') {
+        // Progress inside the current level or segment (0..1), counters, checkpoint and a sample of the route walked
+        const done = d7.stage === 'maze' ? d7.level : cfg7.levels + d7.seg, f = Math.min(0.99, Math.max(0, Number(req.body.frac) || 0));
+        d7.prog = Math.max(d7.prog || 0, done + f);
+        d7.caught = Math.min((d7.caught || 0) + 50, Math.max(d7.caught || 0, Math.floor(Number(req.body.caught) || 0)));
+        d7.falls = Math.min((d7.falls || 0) + 50, Math.max(d7.falls || 0, Math.floor(Number(req.body.falls) || 0)));
+        if (d7.stage === 'maze') {
+          const cp = Math.floor(Number(req.body.cp) || 0); if (cp > (d7.cp || 0) && cp <= 2) d7.cp = cp;
+          const n = D7.level(cfg7, d7.level).n, cells = (Array.isArray(req.body.cells) ? req.body.cells : []).slice(0, 80).map(Number).filter(c => Number.isInteger(c) && c >= 0 && c < n * n);
+          if (cells.length) {
+            const tr = ((await db.ref(`d7trace/L${d7.level}/${uid}`).get()).val()) || [];
+            await db.ref(`d7trace/L${d7.level}/${uid}`).set(tr.concat(cells).slice(-600));
+          }
+        }
+        await db.ref('d7/' + uid).set(d7);
+      }
+    }
+
     const day6view = () => {
       const cap = (Number(cfg6.minutes) || 40) * 60000;
       if (!d6 || !d6.start) return { screen: 'day6intro', minutes: cap / 60000 };
@@ -333,6 +379,22 @@ module.exports = async (req, res) => {
       if (d6.done) return { screen: 'day6wait', whisper };
       const step = D6.STEPS[d6.idx];
       return { screen: 'day6', step: D6.present(d6), readyAt: d6.shown + step.min * 1000, endsAt: d6.start + cap, now: Date.now(), whisper };
+    };
+
+    const day7view = async () => {
+      const mins = cfg7.minutes;
+      if (action === 'd7ping' && d7 && d7.start) return { screen: 'day7ping', escaped: (await db.ref('d7meta/done').get()).val() || 0 };
+      if (!d7 || !d7.start) return { screen: 'day7intro', minutes: mins };
+      const escaped = (await db.ref('d7meta/done').get()).val() || 0;
+      if (d7.done || d7over) return { screen: 'day7wait', finished: !!d7.done, escaped };
+      const out = { screen: 'day7', stage: d7.stage, endsAt: d7.start + mins * 60000, now: Date.now(), escaped, levels: cfg7.levels, segs: cfg7.segs, caught: d7.caught || 0, falls: d7.falls || 0 };
+      if (d7.stage === 'maze') {
+        const m = D7.level(cfg7, d7.level);
+        const raw = (await db.ref(`d7trace/L${d7.level}`).orderByKey().limitToLast(8).get()).val() || {};
+        const ids = Object.keys(raw).filter(i => i !== uid).sort(() => Math.random() - 0.5).slice(0, 3);
+        Object.assign(out, { level: d7.level, cp: d7.cp || 0, maze: D7.wire(m), traces: ids.map(i => raw[i]) });
+      } else Object.assign(out, { seg: d7.seg, rope: D7.rope(cfg7, d7.seg) });
+      return out;
     };
 
     let view;
@@ -348,6 +410,7 @@ module.exports = async (req, res) => {
     else if (day === 4) view = await day4view();
     else if (day === 5) view = await day5view();
     else if (day === 6) view = day6view();
+    else if (day === 7) view = await day7view();
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid, sid) : undefined, view, now: Date.now() });
