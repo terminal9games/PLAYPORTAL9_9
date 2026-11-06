@@ -99,7 +99,7 @@
     <p style="font-size:13px;color:#bbb;margin:0 0 10px">Press "Create rooms and open the maze" when the players are online. Each room gets the same number of hunters and survivors. Hunters try to catch survivors (a catch sends the survivor back to the start and moves the hunter to a random place, and hunters cannot enter the survivors' safe zone). Survivors who reach the exit go on to the rope. An odd player out watches the rooms and goes to the rope when the maze ends. Survivors who never escape are eliminated; hunters pass if enough survivors in their room failed and they made enough kills. The rope then ranks everyone by time.</p>
     <div class="row" style="font-size:13px"><input id="d7m" type="number" min="1" max="120" value="25" style="width:60px;margin:0"> maze min <input id="d7rm" type="number" min="3" max="120" value="25" style="width:60px;margin:0"> rope min <input id="d7rs" type="number" min="2" max="40" value="8" style="width:60px;margin:0"> room size <input id="d7lb" type="number" min="10" max="1800" value="180" style="width:70px;margin:0"> lobby s <input id="d7s" type="number" min="21" max="121" value="61" style="width:60px;margin:0"> maze size <input id="d7g" type="number" min="1" max="10" value="5" style="width:50px;margin:0"> rope segments</div>
     <div class="row" style="font-size:13px"><input id="d7nd" type="number" min="1" max="100" value="50" style="width:60px;margin:0"> % of survivors that must fail for hunters to pass <input id="d7mk" type="number" min="0" max="20" value="1" style="width:50px;margin:0"> min kills <input id="d7z" type="number" min="3" max="30" value="12" style="width:50px;margin:0"> safe zone size <input id="d7lv" type="number" min="0" max="50" value="0" style="width:50px;margin:0"> lives (0 = unlimited) <input id="d7c" type="number" min="0" max="90" value="30" style="width:60px;margin:0"> % eliminated in the rope</div>
-    <div class="row"><label style="font-size:13px"><input type="checkbox" id="d7n"> New mazes (only before opening the maze)</label><button id="d7save">Save</button><button id="d7start">Create rooms and open the maze</button><button id="d7end">End the maze now</button><span id="d7msg2"></span></div>
+    <div class="row"><label style="font-size:13px"><input type="checkbox" id="d7n"> New mazes (only before opening the maze)</label><button id="d7save">Save</button><button id="d7start">Create rooms and open the maze</button><button id="d7end">End the maze now</button><button id="d7reset">Reset Day 7</button><span id="d7msg2"></span></div>
     <div id="d7info" style="font-size:13px;margin-top:8px"></div>
   </div>
   <div class="card">
@@ -234,6 +234,11 @@ $('d7save').onclick = async () => {
 $('d7start').onclick = async () => {
   if (!confirm('Create the rooms now? Players with an open game will see their role in the lobby. Previous Day 7 progress is erased.')) return;
   const r = await adm('start7'); $('d7msg2').textContent = r.error || (r.rooms + ' room(s), ' + r.players + ' players' + (r.spectator ? ', 1 spectator' : '')); load();
+};
+$('d7reset').onclick = async () => {
+  if (!confirm('Erase ALL Day 7 progress (rooms, roles, maze and rope progress)?')) return;
+  const rv = confirm('Also bring back (revive) the players who were eliminated on Day 7?\nOK = revive them, Cancel = leave them eliminated.');
+  const r = await adm('reset7', { revive: rv }); $('d7msg2').textContent = r.error || ('Day 7 reset' + (r.revived ? ', ' + r.revived + ' revived' : '')); load();
 };
 $('d7end').onclick = async () => { if (!confirm('End the maze for everyone now?')) return; const r = await adm('end7'); $('d7msg2').textContent = r.error || 'Maze ended'; load(); };
 let first = true;
