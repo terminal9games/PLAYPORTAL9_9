@@ -183,10 +183,10 @@ async function resolveMaze7(now, force) {
 }
 
 // Closes a day: everyone who did not complete it is eliminated; days with a ranking resolve it here.
-async function closeDay(day) {
+async function closeDay(day, group) {   // group: 'real' (default) or 'test'. The two groups are judged separately.
   if (day === 5) await resolveAll5(Date.now());
   if (day === 7) await resolveMaze7(Date.now(), true);
-  const testMode = !!(await db.ref('config/test_mode').get()).val();   // test mode: only test players take part
+  const testMode = group === 'test';   // test players and real players are never judged together
   const players = (await db.ref('players').get()).val() || {};
   const up = {};
   const pending = Object.keys(players).filter(id => players[id].status === 'active' && players[id].current_day === day && !!players[id].test === testMode);
@@ -269,6 +269,11 @@ async function closeDay(day) {
     const keep = new Set(started.slice(0, started.length - nOut));
     order.forEach(id => { const ok = keep.has(id), reveal = { day: 7, ok, finished: !!(all[id] && all[id].done), phase: 'rope' }; if (ok) pass(id, reveal); else elim(id, reveal); });
   } else pending.forEach(id => elim(id));
+  // Anyone left behind on an earlier day (a day was skipped, or a close was missed) is out too
+  Object.keys(players).forEach(id => {
+    const p = players[id];
+    if (p.status === 'active' && p.current_day < day && !!p.test === testMode && !up[`players/${id}/status`]) { up[`players/${id}/status`] = 'eliminated'; up[`players/${id}/eliminated_day`] = p.current_day; }
+  });
   if (Object.keys(up).length) await db.ref().update(up);
 }
 
@@ -276,7 +281,7 @@ async function closeDay(day) {
 async function closeOnce(day) {
   const r = await db.ref('config/closed_day').transaction(cur => (cur === day ? undefined : day));
   if (!r.committed) return false;
-  await closeDay(day);
+  await closeDay(day, 'real');
   return true;
 }
 // Runs on every request: if the deadline passed and the day is still open, close it.
@@ -289,6 +294,9 @@ async function maintain() {
 }
 async function closeNow() {
   const day = ((await db.ref('config/active_day').get()).val()) || 1;
+  // In test mode the admin only closes the day for the test players. The real deadline is left alone, so
+  // real players are still judged when it arrives.
+  if ((await db.ref('config/test_mode').get()).val()) { await closeDay(day, 'test'); return true; }
   return closeOnce(day);
 }
-module.exports = { resolveMaze7, admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
+module.exports = { closeOnce, resolveMaze7, admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
