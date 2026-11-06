@@ -273,13 +273,24 @@
 </section>
 <div id="t6w" class="secret" aria-live="polite"></div>
 
-<section id="d7i" class="screen">
+<section id="d7l" class="screen">
   <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
   <div class="t6">
     <h2 style="font-size:22px;margin:0">The Dark Maze</h2>
-    <p style="margin:0;font-size:15px;line-height:1.7">Find the way out in the dark. Something is following you, and it never stops.<br>Then cross the rope. The wind will not help you.<br>You have <b id="d7min"></b> minutes from the moment you press Start, and the clock keeps running if you leave.</p>
-    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6">Move: arrow keys or WASD, or drag on the screen.<br>Rope: left and right keys, or hold the left or right side of the screen.<br>Headphones recommended.</p>
-    <button id="d7go" class="gbtn">Start</button>
+    <h2 id="d7lr" style="font-size:20px;margin:0"></h2>
+    <p id="d7lx" style="margin:0;font-size:15px;line-height:1.7"></p>
+    <p id="d7lc" style="margin:0;font-size:26px;font-variant-numeric:tabular-nums"></p>
+    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6">Move: arrow keys or WASD, or drag on the screen. Headphones recommended.</p>
+  </div>
+</section>
+
+<section id="d7ri" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 id="d7rt" style="font-size:22px;margin:0">The rope</h2>
+    <p id="d7rx" style="margin:0;font-size:15px;line-height:1.7"></p>
+    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6">Rope: left and right keys, or hold the left or right side of the screen.<br>You have <b id="d7rmin"></b> minutes from the moment you press Start, and the clock keeps running if you leave.</p>
+    <button id="d7rgo" class="gbtn">Start</button>
   </div>
 </section>
 
@@ -287,6 +298,7 @@
   <canvas id="d7cv" aria-label="Game"></canvas>
   <div id="d7hud"><span id="d7a"></span><span id="d7b"></span><span id="d7c">--:--</span></div>
   <div id="d7msg" aria-live="polite"></div>
+  <div id="d7sp" style="display:none;position:absolute;bottom:12px;left:12px;z-index:4;gap:8px;align-items:center"><button id="d7prev" class="opt" style="padding:6px 12px;font-size:12px">&lt;</button><button id="d7next" class="opt" style="padding:6px 12px;font-size:12px">&gt;</button><select id="d7room" style="background:#000;color:#fff;border:1px solid #555;border-radius:6px;padding:5px"></select></div>
   <button id="d7snd" type="button">Sound on</button>
 </section>
 
@@ -431,7 +443,10 @@ function route(v) {
   if (v.screen === 'day6intro') { show('d6i'); $('t6go').disabled = false; $('t6min').textContent = v.minutes; return; }
   if (v.screen === 'day6') return playD6(v);
   if (v.screen === 'day6wait') return waitD6(v);
-  if (v.screen === 'day7intro') { show('d7i'); $('d7go').disabled = false; $('d7min').textContent = v.minutes; return; }
+  if (v.screen === 'day7lobby') return lobbyD7(v);
+  if (v.screen === 'day7m') return playD7m(v);
+  if (v.screen === 'day7spec') return playD7s(v);
+  if (v.screen === 'day7ropeintro') return ropeIntroD7(v);
   if (v.screen === 'day7') return playD7(v);
   if (v.screen === 'day7wait') return waitD7(v);
   show('login'); $('err').textContent = v.msg || 'Game not available yet.';
@@ -737,10 +752,17 @@ async function reveal(v) {
     return;
   }
   if (v.day === 7) {
-    $('r1').textContent = v.finished ? 'You made it out' : 'The hour is over';
-    $('r2').textContent = '';
-    await sleep(2500);
-    $('r2').textContent = v.ok ? 'You were fast enough. This time.' : 'Others were faster.';
+    if (v.phase === 'maze') {
+      $('r1').textContent = v.role === 'hunter' ? 'The hunt is over' : 'You did not make it out';
+      $('r2').textContent = '';
+      await sleep(2500);
+      $('r2').textContent = v.role === 'hunter' ? (v.team ? 'You did not catch enough.' : 'The survivors got away.') : (v.lives ? 'The hunters caught you one time too many.' : 'The hunters were faster.');
+    } else {
+      $('r1').textContent = v.finished ? 'You made it out' : 'The hour is over';
+      $('r2').textContent = '';
+      await sleep(2500);
+      $('r2').textContent = v.ok ? 'You were fast enough. This time.' : 'Others were faster.';
+    }
     await sleep(3500);
     try { await call('ack'); } catch {}
     if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
@@ -775,16 +797,32 @@ async function reveal(v) {
 }
 
 
-// ---- Day 7: The Dark Maze + The Tightrope ----
-// The server owns the clock and the ranking. This code only draws, moves you, and reports progress.
+// ---- Day 7: The Dark Maze (hunters against survivors) + The Tightrope ----
+// The server is the referee: it owns the clock, the rooms, the kills and the escapes. This code only draws,
+// moves you, and tells the server where you are. You never see anyone's ID, only a role.
 let g7 = null, ac7 = null;
-function waitD7(v) {
-  show('d7w');
-  $('d7wt').textContent = v.finished ? 'You made it out' : 'Time is up';
-  $('d7wp').textContent = v.escaped + (v.escaped === 1 ? ' player has' : ' players have') + ' escaped so far. Terminal 9 will decide. Come back later.';
-  pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { waitD7(v); } }, 20000);
+function lobbyD7(v) {
+  show('d7l');
+  const t = () => { if (!v.startsAt) return 'The maze has not been opened yet. Stay on this page.'; const s = Math.max(0, Math.ceil((v.startsAt - (Date.now() + (v.now - v.t0))) / 1000)); return 'The maze opens in ' + Math.floor(s / 60) + ':' + pad2(s % 60); };
+  v.t0 = Date.now();
+  $('d7lr').textContent = v.role === 'hunter' ? 'You are a HUNTER' : v.role === 'survivor' ? 'You are a SURVIVOR' : v.role === 'spec' ? 'You will watch this round' : '';
+  $('d7lr').style.color = v.role === 'hunter' ? '#ff0055' : v.role === 'survivor' ? '#00f3ff' : '#aaa';
+  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark and catch them. You cannot enter their starting area. Every catch moves you somewhere else.'
+    : v.role === 'survivor' ? 'Find the exit before the hunters find you. If you are caught you go back to the start. Be careful: the hunters are faster than they look.'
+    : v.role === 'spec' ? 'There is an odd number of players, so you will not play in the maze. You can watch every room (roles only). You go on to the rope when the maze ends.' : 'Two teams will be chosen at random. Hunters against survivors. Headphones recommended.';
+  const tick = () => { $('d7lc').textContent = t(); };
+  tick(); const iv = setInterval(tick, 500);
+  const next = async () => { try { const d = await call('view'); clearInterval(iv); if (d.view.screen !== 'day7lobby' || d.view.role !== v.role) return route(d.view); v.startsAt = d.view.startsAt; v.now = d.view.now; v.t0 = Date.now(); } catch {} pollT = setTimeout(next, 3000); };
+  pollT = setTimeout(next, 3000);
+  g7 = { stopped: false, raf: 0, ping: iv, kd() {}, ku() {}, rs() {} };
 }
-$('d7go').onclick = async () => { $('d7go').disabled = true; try { if (!ac7) ac7 = makeAudio(); route((await call('d7start')).view); } catch { $('d7go').disabled = false; } };
+function ropeIntroD7(v) {
+  show('d7ri'); $('d7rmin').textContent = v.minutes;
+  $('d7rt').textContent = v.role === 'survivor' ? 'You made it out' : v.role === 'hunter' ? 'The hunt is over' : v.role === 'spec' ? 'The maze is over' : 'The rope';
+  $('d7rx').textContent = v.wait ? 'The maze is still open for the others. You can start the rope now, and your time counts only from when you press Start.' : 'Now cross the rope in the wind. The faster and calmer you are, the better your chances.';
+  $('d7rgo').disabled = false;
+}
+$('d7rgo').onclick = async () => { $('d7rgo').disabled = true; try { if (!ac7) ac7 = makeAudio(); route((await call('d7rope')).view); } catch { $('d7rgo').disabled = false; } };
 
 function makeAudio() {
   try {
@@ -801,13 +839,14 @@ function makeAudio() {
   } catch { return null; }
 }
 function say7(t, ms) { const m = $('d7msg'); m.textContent = t; m.classList.add('on'); clearTimeout(m._t); m._t = setTimeout(() => m.classList.remove('on'), ms || 2600); }
-function stopD7() { if (g7) { cancelAnimationFrame(g7.raf); clearInterval(g7.ping); window.removeEventListener('keydown', g7.kd); window.removeEventListener('keyup', g7.ku); window.removeEventListener('resize', g7.rs); g7.stopped = true; g7 = null; } if (ac7 && ac7.wind) ac7.wind.gain.value = 0; }
+function stopD7() { if (g7) { cancelAnimationFrame(g7.raf); clearInterval(g7.ping); clearInterval(g7.sync); window.removeEventListener('keydown', g7.kd); window.removeEventListener('keyup', g7.ku); window.removeEventListener('resize', g7.rs); g7.stopped = true; g7 = null; } if (ac7 && ac7.wind) ac7.wind.gain.value = 0; $('d7sp').style.display = 'none'; }
 
-function playD7(v) {
-  stopD7(); show('d7');
+// Shared canvas, keyboard and touch setup for the maze, the spectator view and the rope
+function setupD7(v, extra) {
+  stopD7(); show('d7'); clearTimeout(pollT);
   const cv = $('d7cv'), cx = cv.getContext('2d'), dk = document.createElement('canvas'), dx = dk.getContext('2d');
-  const G = g7 = { v, keys: {}, joy: null, stopped: false, offset: v.now - Date.now(), caught: v.caught, falls: v.falls, busy: false, last: performance.now(), t: 0, escaped: v.escaped, msgT: 0, trail: [], lastCell: -1, fade: 0 };
-  const rs = G.rs = () => { const r = window.devicePixelRatio || 1; cv.width = dk.width = Math.floor(innerWidth * r); cv.height = dk.height = Math.floor(innerHeight * r); G.r = r; }; rs(); window.addEventListener('resize', rs);
+  const G = g7 = Object.assign({ v, keys: {}, joy: null, stopped: false, offset: v.now - Date.now(), busy: false, last: performance.now(), t: 0, fade: 0, cv, cx, dk, dx }, extra || {});
+  G.rs = () => { const r = window.devicePixelRatio || 1; cv.width = dk.width = Math.floor(innerWidth * r); cv.height = dk.height = Math.floor(innerHeight * r); G.r = r; }; G.rs(); window.addEventListener('resize', G.rs);
   G.kd = e => { const k = e.key.toLowerCase(); if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) { G.keys[k] = true; e.preventDefault(); } };
   G.ku = e => { G.keys[e.key.toLowerCase()] = false; };
   window.addEventListener('keydown', G.kd); window.addEventListener('keyup', G.ku);
@@ -815,109 +854,166 @@ function playD7(v) {
   cv.onpointermove = e => { if (G.joy) { G.joy.x = e.clientX; G.joy.y = e.clientY; } };
   cv.onpointerup = cv.onpointercancel = () => { G.joy = null; };
   $('d7snd').onclick = () => { if (!ac7) ac7 = makeAudio(); if (ac7) { const off = ac7.master.gain.value > 0; ac7.master.gain.value = off ? 0 : 0.8; $('d7snd').textContent = off ? 'Sound off' : 'Sound on'; } };
-  $('d7a').textContent = v.stage === 'maze' ? 'LEVEL ' + (v.level + 1) + ' / ' + v.levels : 'ROPE ' + (v.seg + 1) + ' / ' + v.segs;
-  const sendPing = async () => {
-    if (G.stopped) return;
-    try { const d = await call('d7ping', { frac: G.frac || 0, caught: G.caught, falls: G.falls, cp: G.cpIdx || 0, cells: G.trail.splice(0, 80) }); if (d.view && d.view.escaped != null) G.escaped = d.view.escaped; } catch {}
-  };
-  G.ping = setInterval(sendPing, 10000);
-  if (v.stage === 'maze') initMaze(G, v); else initRope(G, v);
-  const loop = now => {
-    if (G.stopped) return;
-    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
-    const left = G.v.endsAt - (Date.now() + G.offset);
-    $('d7c').textContent = Math.max(0, Math.floor(left / 60000)) + ':' + pad2(Math.max(0, Math.floor(left / 1000) % 60));
-    $('d7b').textContent = G.escaped + ' escaped';
-    if (left <= -1500 && !G.busy) { G.busy = true; (async () => { try { route((await call('view')).view); } catch { G.busy = false; } })(); return; }
-    if (G.v.stage === 'maze') stepMaze(G, dt, cx, dk, dx, cv); else stepRope(G, dt, cx, cv);
-    G.raf = requestAnimationFrame(loop);
-  };
-  G.raf = requestAnimationFrame(loop);
+  return G;
 }
+const clock7 = G => { const left = G.v.endsAt - (Date.now() + G.offset); $('d7c').textContent = Math.max(0, Math.floor(left / 60000)) + ':' + pad2(Math.max(0, Math.floor(left / 1000) % 60)); return left; };
 function inputVec(G) {
   let x = (G.keys.arrowright || G.keys.d ? 1 : 0) - (G.keys.arrowleft || G.keys.a ? 1 : 0), y = (G.keys.arrowdown || G.keys.s ? 1 : 0) - (G.keys.arrowup || G.keys.w ? 1 : 0);
   if (G.joy) { const dx = G.joy.x - G.joy.ox, dy = G.joy.y - G.joy.oy, l = Math.hypot(dx, dy); if (l > 8) { x = dx / Math.max(l, 50); y = dy / Math.max(l, 50); } }
   return [x, y];
 }
+const goView = async G => { if (G.busy) return; G.busy = true; try { route((await call('view')).view); } catch { G.busy = false; } };
 
-// ----- the maze -----
-function initMaze(G, v) {
-  const m = v.maze, n = m.n; G.n = n; G.g = Uint8Array.from(m.grid, c => +c); G.exit = m.exit; G.cps = m.cps; G.cpIdx = v.cp;
-  G.spawn = v.cp > 0 ? m.cps[v.cp - 1] : m.start;
-  G.pos = { x: (G.spawn % n) + 0.5, y: Math.floor(G.spawn / n) + 0.5 }; G.face = 0;
-  G.dstart = D7.dists(G.g, n, m.start); G.pathLen = G.dstart[m.exit]; G.frac = 0;
-  G.traces = v.traces || []; G.chaser = null; G.chaseIn = D7.CHASER_DELAY; G.dist = null; G.dcell = -1; G.prox = 0; G.beat = 0; G.visited = new Set();
-  say7(v.level === 0 && v.cp === 0 ? 'Find the exit.' : 'Keep moving.', 2800);
+function playD7(v) {   // the rope
+  const G = setupD7(v, { falls: v.falls, escaped: v.escaped });
+  $('d7a').textContent = 'ROPE ' + (v.seg + 1) + ' / ' + v.segs;
+  const sendPing = async () => { if (G.stopped) return; try { const d = await call('d7ping', { frac: G.frac || 0, falls: G.falls }); if (d.view && d.view.escaped != null) G.escaped = d.view.escaped; } catch {} };
+  G.ping = setInterval(sendPing, 10000);
+  initRope(G, v);
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const left = clock7(G); $('d7b').textContent = G.escaped + ' finished';
+    if (left <= -1500) return goView(G);
+    stepRope(G, dt, G.cx, G.cv);
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
 }
-function respawn(G) {
-  G.caught++; G.chaser = null; G.chaseIn = D7.CHASER_DELAY; G.fade = 1; say7('It found you.', 2600);
-  G.pos = { x: (G.spawn % G.n) + 0.5, y: Math.floor(G.spawn / G.n) + 0.5 }; G.dcell = -1;
-}
-async function finishLevel(G) {
-  if (G.busy) return; G.busy = true; say7('You are out.', 1800);
-  try { const d = await call('d7level', { level: G.v.level }); setTimeout(() => route(d.view), 1200); }
-  catch (x) { G.busy = false; say7((x && x.error) || 'Connection error.', 2500); }
-}
-function stepMaze(G, dt, cx, dk, dx, cv) {
-  const n = G.n, g = G.g, [ix, iy] = inputVec(G);
-  if (!G.busy) {
-    D7.move(g, n, G.pos, ix, iy, dt);
-    if (ix || iy) { const a = Math.atan2(iy, ix); let d = a - G.face; d = Math.atan2(Math.sin(d), Math.cos(d)); G.face += d * Math.min(1, dt * 12); }
-  }
-  const c = D7.cellOf(n, G.pos);
-  if (c !== G.lastCell) { G.lastCell = c; if (!G.visited.has(c)) { G.visited.add(c); if (G.trail.length < 400) G.trail.push(c); } }
-  if (G.dstart[c] >= 0) G.frac = Math.max(G.frac, Math.min(0.99, G.dstart[c] / G.pathLen));
-  G.cps.forEach((cc, i) => { if (c === cc && G.cpIdx === i) { G.cpIdx = i + 1; G.spawn = cc; say7('Checkpoint.', 1600); } });
-  if (c === G.exit) finishLevel(G);
-  // the chaser
-  if (!G.busy) {
-    if (G.dcell !== c) { G.dist = D7.dists(g, n, c); G.dcell = c; }
-    if (!G.chaser) {
-      G.chaseIn -= dt;
-      if (G.chaseIn <= 0) {
-        const far = []; for (let i = 0; i < G.dist.length; i++) if (G.dist[i] >= 38 && G.dist[i] <= 48) far.push(i);
-        const pick = far.length ? far[Math.floor(Math.random() * far.length)] : G.exit;
-        G.chaser = { x: (pick % n) + 0.5, y: Math.floor(pick / n) + 0.5 };
+
+// ----- the live maze (hunters and survivors) -----
+function playD7m(v) {
+  const n = v.maze.n, grid = Uint8Array.from(v.maze.grid, c => +c), dist = D7.dists(grid, n, v.maze.start);
+  const G = setupD7(v, { n, g: grid, dist, role: v.role, zone: v.zone, exit: v.maze.exit, start: v.maze.start, others: new Map(), kills: 0, deaths: 0, esc: 0, total: 0, prox: 0, beat: 0, atk: new Set(), atkAt: 0, inflight: false, face: 0, lastSeen: 0 });
+  G.pos = { x: (v.maze.start % n) + 0.5, y: Math.floor(v.maze.start / n) + 0.5 };
+  const hunter = v.role === 'hunter';
+  const inZone = (x, y) => { const c = Math.floor(y) * n + Math.floor(x); return dist[c] >= 0 && dist[c] <= v.zone; };
+  $('d7a').textContent = hunter ? 'HUNTER' : 'SURVIVOR';
+  say7(hunter ? 'Hunt them.' : 'Find the exit.', 3000);
+  const doSync = async () => {
+    if (G.stopped || G.inflight || G.busy) return; G.inflight = true;
+    const atk = [...G.atk]; G.atk.clear();
+    try {
+      const d = await call('d7sync', { x: G.pos.x, y: G.pos.y, atk }); const s = d.sync; if (G.stopped) return;
+      if (!s) return route(d.view);   // the server answered with a screen instead: the maze is over for you
+      if (s.ended) return goView(G);
+      if (s.wait) return;
+      if (s.escaped) { G.busy = true; say7('You are out.', 1800); setTimeout(() => goView(Object.assign(G, { busy: false })), 1300); return; }
+      if (s.fix || s.tp || (s.me && Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5)) G.pos = { x: s.me.x, y: s.me.y };
+      if (s.me) {
+        if (!hunter && s.me.deaths > G.deaths) { G.fade = 1; say7('Caught.', 2200); if (ac7) ac7.thump(0.6); }
+        if (hunter && s.me.kills > G.kills) { say7('Caught one.', 1800); G.fade = 0.6; if (ac7) ac7.thump(0.5); }
+        G.deaths = s.me.deaths; G.kills = s.me.kills; G.inv = s.me.inv;
       }
-    } else {
-      D7.chase(G.chaser, g, n, G.dist, dt, Math.min(3.3, D7.CHASER_SPEED + 0.1 * G.caught));
-      if (Math.hypot(G.chaser.x - G.pos.x, G.chaser.y - G.pos.y) < 0.7) respawn(G);
+      G.esc = s.esc; G.total = s.total; G.left = s.left;
+      const seen = new Set();
+      for (const o of s.others || []) { seen.add(o.i); const c = G.others.get(o.i); if (c) { c.tx = o.x; c.ty = o.y; c.r = o.r; c.s = o.s; c.t = Date.now(); } else G.others.set(o.i, { x: o.x, y: o.y, tx: o.x, ty: o.y, r: o.r, s: o.s, t: Date.now() }); }
+      for (const [k, c] of G.others) if (!seen.has(k) && Date.now() - c.t > 900) G.others.delete(k);
+    } catch (x) { if (x && x.error && !x.kicked) say7(x.error, 1500); }
+    finally { G.inflight = false; }
+  };
+  G.sync = setInterval(doSync, 250);
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const left = clock7(G); $('d7b').textContent = G.esc + ' / ' + G.total + ' escaped';
+    $('d7a').textContent = hunter ? 'HUNTER - ' + G.kills + ' kills' : 'SURVIVOR - caught ' + G.deaths + 'x';
+    if (left <= -2500) return goView(G);
+    const [ix, iy] = inputVec(G);
+    if (!G.busy) {
+      const before = { x: G.pos.x, y: G.pos.y };
+      D7.move(grid, n, G.pos, ix, iy, dt);
+      if (hunter && inZone(G.pos.x, G.pos.y)) { G.pos.x = before.x; G.pos.y = before.y; }   // hunters cannot enter the safe zone
+      if (ix || iy) { const a = Math.atan2(iy, ix); let d = a - G.face; d = Math.atan2(Math.sin(d), Math.cos(d)); G.face += d * Math.min(1, dt * 12); }
     }
-  }
-  const dd = G.chaser ? G.dist[Math.floor(G.chaser.y) * n + Math.floor(G.chaser.x)] : 99;
-  G.prox += ((dd < 0 ? 0 : Math.max(0, Math.min(1, 1 - (dd - 3) / 22))) - G.prox) * Math.min(1, dt * 2);
-  if (ac7) { G.beat -= dt; if (G.beat <= 0) { ac7.thump(0.12 + 0.35 * G.prox); setTimeout(() => ac7 && ac7.thump(0.07 + 0.25 * G.prox), 180); G.beat = 1.15 - 0.7 * G.prox; } }
-  G.fade = Math.max(0, G.fade - dt * 0.7);
-  // draw
-  const W = cv.width, H = cv.height, S = Math.max(24, Math.min(46, Math.min(innerWidth, innerHeight) / 13)) * G.r;
-  const ox = W / 2 - G.pos.x * S, oy = H / 2 - G.pos.y * S;
+    let near = 99;
+    for (const c of G.others.values()) {
+      c.x += (c.tx - c.x) * Math.min(1, dt * 9); c.y += (c.ty - c.y) * Math.min(1, dt * 9);
+      const d = Math.hypot(c.x - G.pos.x, c.y - G.pos.y);
+      if (hunter && c.r === 's' && !c.s && d < 1.3) { const k = [...G.others].find(([, o]) => o === c)[0]; if (Date.now() - G.atkAt > 650) { G.atk.add(k); G.atkAt = Date.now(); } }
+      if (!hunter && c.r === 'h') near = Math.min(near, d);
+    }
+    G.prox += (Math.max(0, Math.min(1, 1 - (near - 2) / 9)) - G.prox) * Math.min(1, dt * 3);
+    if (ac7) { G.beat -= dt; if (G.beat <= 0) { ac7.thump(0.10 + 0.35 * G.prox); setTimeout(() => ac7 && ac7.thump(0.06 + 0.25 * G.prox), 180); G.beat = 1.2 - 0.75 * G.prox; } }
+    G.fade = Math.max(0, G.fade - dt * 0.8);
+    drawMaze(G, hunter);
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
+}
+// Draws the maze around (px, py). dark = the flashlight view; spectators see a wide, softly lit area.
+function drawMaze(G, hunter, spec) {
+  const { cx, cv, dk, dx, n, g } = G, W = cv.width, H = cv.height, S = Math.max(24, Math.min(46, Math.min(innerWidth, innerHeight) / 13)) * G.r;
+  const px = spec ? G.cam.x : G.pos.x, py = spec ? G.cam.y : G.pos.y, ox = W / 2 - px * S, oy = H / 2 - py * S;
   cx.fillStyle = '#050508'; cx.fillRect(0, 0, W, H);
   const x0 = Math.max(0, Math.floor(-ox / S)), x1 = Math.min(n - 1, Math.ceil((W - ox) / S)), y0 = Math.max(0, Math.floor(-oy / S)), y1 = Math.min(n - 1, Math.ceil((H - oy) / S));
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const i = y * n + x;
-    if (g[i]) { cx.fillStyle = '#2b2b38'; cx.fillRect(ox + x * S, oy + y * S, S + 1, S + 1); }
-    else { cx.fillStyle = '#14141b'; cx.fillRect(ox + x * S, oy + y * S, S + 1, S + 1); }
+    const i = y * n + x, d = G.dist[i];
+    cx.fillStyle = g[i] ? '#2b2b38' : (d >= 0 && d <= G.zone ? '#10241a' : '#14141b');   // the safe zone is faintly green
+    cx.fillRect(ox + x * S, oy + y * S, S + 1, S + 1);
   }
-  // footprints of other players: faint, and they do not say where they were going
-  cx.fillStyle = 'rgba(150,200,255,.35)';
-  for (const tr of G.traces) for (const i of tr) { const x = i % n, y = Math.floor(i / n); if (x >= x0 && x <= x1 && y >= y0 && y <= y1) { cx.beginPath(); cx.arc(ox + (x + 0.5) * S, oy + (y + 0.5) * S, S * 0.09, 0, 7); cx.fill(); } }
-  // exit (soft glow, slow) and checkpoints
   const ex = G.exit % n, ey = Math.floor(G.exit / n), gl = 0.55 + 0.25 * Math.sin(G.t * 1.6);
   cx.fillStyle = 'rgba(57,255,20,' + gl + ')'; cx.beginPath(); cx.arc(ox + (ex + 0.5) * S, oy + (ey + 0.5) * S, S * 0.38, 0, 7); cx.fill();
-  cx.fillStyle = 'rgba(255,190,60,.6)'; G.cps.forEach(cc => { cx.fillRect(ox + ((cc % n) + 0.3) * S, oy + (Math.floor(cc / n) + 0.3) * S, S * 0.4, S * 0.4); });
-  if (G.chaser) { cx.fillStyle = '#ff0055'; cx.shadowColor = '#ff0055'; cx.shadowBlur = 18 * G.r; cx.beginPath(); cx.arc(ox + G.chaser.x * S, oy + G.chaser.y * S, S * 0.36, 0, 7); cx.fill(); cx.shadowBlur = 0; }
-  cx.fillStyle = '#e8f4ff'; cx.beginPath(); cx.arc(W / 2, H / 2, S * 0.26, 0, 7); cx.fill();
-  // darkness with a flashlight cone
-  dx.globalCompositeOperation = 'source-over'; dx.clearRect(0, 0, W, H); dx.fillStyle = 'rgba(0,0,0,.985)'; dx.fillRect(0, 0, W, H);
+  const dot = (x, y, r, col, shield, label) => {
+    cx.fillStyle = col; cx.shadowColor = col; cx.shadowBlur = 14 * G.r; cx.beginPath(); cx.arc(ox + x * S, oy + y * S, S * 0.3, 0, 7); cx.fill(); cx.shadowBlur = 0;
+    if (shield) { cx.strokeStyle = 'rgba(255,255,255,.7)'; cx.lineWidth = 2 * G.r; cx.beginPath(); cx.arc(ox + x * S, oy + y * S, S * 0.45, 0, 7); cx.stroke(); }
+    if (label) { cx.fillStyle = '#ddd'; cx.font = (11 * G.r) + 'px Montserrat,sans-serif'; cx.textAlign = 'center'; cx.fillText(label, ox + x * S, oy + y * S - S * 0.5); }
+  };
+  if (spec) { for (const p of G.players) dot(p.x, p.y, 0, p.r === 'h' ? '#ff0055' : '#00f3ff', p.s, (p.r === 'h' ? 'H' : 'S') + (p.i + 1)); }
+  else {
+    for (const c of G.others.values()) dot(c.x, c.y, 0, c.r === 'h' ? '#ff0055' : '#00f3ff', c.s);
+    const inv = (G.inv || 0) > Date.now() + G.offset;
+    dot(G.pos.x, G.pos.y, 0, hunter ? '#ffb0c4' : '#e8f4ff', inv);
+  }
+  // darkness: a flashlight cone for players, a wide soft light for the spectator
+  dx.globalCompositeOperation = 'source-over'; dx.clearRect(0, 0, W, H); dx.fillStyle = spec ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.985)'; dx.fillRect(0, 0, W, H);
   dx.globalCompositeOperation = 'destination-out';
-  let gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 2.4); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = gr; dx.beginPath(); dx.arc(W / 2, H / 2, S * 2.4, 0, 7); dx.fill();
-  gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 7); gr.addColorStop(0, 'rgba(0,0,0,.95)'); gr.addColorStop(0.7, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
-  dx.fillStyle = gr; dx.beginPath(); dx.moveTo(W / 2, H / 2); dx.arc(W / 2, H / 2, S * 7, G.face - 0.42, G.face + 0.42); dx.closePath(); dx.fill();
+  if (spec) { const gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 9); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = gr; dx.beginPath(); dx.arc(W / 2, H / 2, S * 9, 0, 7); dx.fill(); }
+  else {
+    let gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 2.4); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = gr; dx.beginPath(); dx.arc(W / 2, H / 2, S * 2.4, 0, 7); dx.fill();
+    gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 7); gr.addColorStop(0, 'rgba(0,0,0,.95)'); gr.addColorStop(0.7, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    dx.fillStyle = gr; dx.beginPath(); dx.moveTo(W / 2, H / 2); dx.arc(W / 2, H / 2, S * 7, G.face - 0.42, G.face + 0.42); dx.closePath(); dx.fill();
+  }
   cx.drawImage(dk, 0, 0);
-  // slow red vignette when the chaser is near, and a dark fade after being caught
-  if (G.prox > 0.02) { const vg = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(120,0,30,0)'); vg.addColorStop(1, 'rgba(120,0,30,' + (0.55 * G.prox) + ')'); cx.fillStyle = vg; cx.fillRect(0, 0, W, H); }
+  if (!spec && G.prox > 0.02) { const vg = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(120,0,30,0)'); vg.addColorStop(1, 'rgba(120,0,30,' + (0.55 * G.prox) + ')'); cx.fillStyle = vg; cx.fillRect(0, 0, W, H); }
   if (G.fade > 0) { cx.fillStyle = 'rgba(0,0,0,' + G.fade + ')'; cx.fillRect(0, 0, W, H); }
-  if (G.joy) { cx.strokeStyle = 'rgba(255,255,255,.25)'; cx.lineWidth = 2 * G.r; cx.beginPath(); cx.arc(G.joy.ox * G.r, G.joy.oy * G.r, 40 * G.r, 0, 7); cx.stroke(); cx.fillStyle = 'rgba(255,255,255,.25)'; cx.beginPath(); cx.arc(G.joy.x * G.r, G.joy.y * G.r, 16 * G.r, 0, 7); cx.fill(); }
+  if (G.joy && !spec) { cx.strokeStyle = 'rgba(255,255,255,.25)'; cx.lineWidth = 2 * G.r; cx.beginPath(); cx.arc(G.joy.ox * G.r, G.joy.oy * G.r, 40 * G.r, 0, 7); cx.stroke(); cx.fillStyle = 'rgba(255,255,255,.25)'; cx.beginPath(); cx.arc(G.joy.x * G.r, G.joy.y * G.r, 16 * G.r, 0, 7); cx.fill(); }
+}
+
+// ----- the spectator (the odd player out) -----
+function playD7s(v) {
+  const G = setupD7(v, { room: null, players: [], follow: 0, cam: { x: 1.5, y: 1.5 }, esc: 0, total: 0, n: 0, g: null, dist: null, exit: 0, zone: 0, others: new Map() });
+  $('d7a').textContent = 'SPECTATOR'; $('d7sp').style.display = 'flex'; say7('Watching.', 2000);
+  const rooms = []; let want = true;
+  const sel = $('d7room'); sel.onchange = () => { G.room = sel.value; want = true; G.follow = 0; };
+  $('d7prev').onclick = () => { G.follow = (G.follow - 1 + Math.max(1, G.players.length)) % Math.max(1, G.players.length); };
+  $('d7next').onclick = () => { G.follow = (G.follow + 1) % Math.max(1, G.players.length); };
+  const doSync = async () => {
+    if (G.stopped || G.busy || G.inflight) return; G.inflight = true;
+    try {
+      const d = await call('d7spec', { room: G.room, wantMaze: want }); const s = d.sync; if (G.stopped) return;
+      if (!s) return route(d.view);
+      if (s.ended) return goView(G);
+      if (s.wait) return;
+      if (s.maze) { G.n = s.maze.n; G.g = Uint8Array.from(s.maze.grid, c => +c); G.dist = D7.dists(G.g, G.n, s.maze.start); G.exit = s.maze.exit; G.zone = s.zone; want = false; }
+      G.room = s.room; if (!rooms.length || rooms.length !== s.rooms.length) { rooms.length = 0; s.rooms.forEach(r => rooms.push(r)); sel.innerHTML = rooms.map(r => '<option value="' + r.id + '">' + r.label + '</option>').join(''); }
+      sel.value = s.room; G.players = s.players.sort((a, b) => a.i - b.i); G.esc = s.esc; G.total = s.total;
+    } catch {} finally { G.inflight = false; }
+  };
+  G.sync = setInterval(doSync, 400); doSync();
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const left = clock7(G); $('d7b').textContent = G.esc + ' / ' + G.total + ' escaped';
+    if (left <= -2500) return goView(G);
+    if (G.g) {
+      const t = G.players[Math.min(G.follow, G.players.length - 1)];
+      if (t) { G.cam.x += (t.x - G.cam.x) * Math.min(1, dt * 6); G.cam.y += (t.y - G.cam.y) * Math.min(1, dt * 6); $('d7a').textContent = (t.r === 'h' ? 'HUNTER ' : 'SURVIVOR ') + (t.i + 1) + (t.r === 'h' ? ' - ' + t.k + ' kills' : ' - caught ' + t.d + 'x'); }
+      drawMaze(G, false, true);
+    }
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
 }
 
 // ----- the tightrope -----
