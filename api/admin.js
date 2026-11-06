@@ -1,4 +1,4 @@
-const { admin, db, maintain, closeNow, newId, secLog, sign, phase5, label5, resolveMaze7 } = require('./_lib');
+const { admin, db, maintain, closeNow, closeOnce, newId, secLog, sign, phase5, label5, resolveMaze7 } = require('./_lib');
 const D6 = require('./_d6');
 const D7 = require('./_d7');
 const { simulate } = require('./_sim');
@@ -12,6 +12,12 @@ async function wipePlayer7(id) {
   if (d && d.room) { up[`rooms7/${d.room}/m/${u}`] = null; up[`rooms7/${d.room}/p/${u}`] = null; }
   await db.ref().update(up);
 }
+
+// Test mode filters who takes part. When it hides players the admin expects, say so instead of "0 players".
+const tmHint = (s, day, tm, n) => {
+  const other = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === day && !!s[i].test !== tm).length;
+  return other ? ' Test mode is ' + (tm ? 'ON, so only test players count, and ' + other + ' real player(s) are waiting. Turn Test mode OFF in the Test lab.' : 'OFF, so test players are ignored (' + other + ' waiting). Turn Test mode ON to use them.') : '';
+};
 
 // A test player plays the whole Day 6 script at random (skips the minimum reading time)
 async function botPlay6(db, u, now) {
@@ -63,6 +69,10 @@ module.exports = async (req, res) => {
       return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, day7: { cfg: d7cfg, run: d7run ? { start: d7run.start, mazeEnd: d7run.mazeEnd, resolved: !!d7run.resolved } : null, rooms: d7rooms, data: d7, done: d7done, units: D7.units(d7cfg) }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
+      // Moving forward closes the previous day first, so players who did not play it are eliminated
+      // (skipped in test mode, where the real tournament is not touched)
+      const cfgNow = (await db.ref('config').get()).val() || {};
+      if (!cfgNow.test_mode && cfgNow.active_day && Number(value) > cfgNow.active_day && cfgNow.closed_day !== cfgNow.active_day) await closeOnce(cfgNow.active_day);
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
       await db.ref('config').update({ active_day: Number(value), ends_at: Date.now() + mins * 60000, closed_day: null, ended: null, duration_min: mins });
       await db.ref('day' + String(Number(value)).replace('.', '_')).remove(); // old test data for that day
@@ -104,7 +114,7 @@ module.exports = async (req, res) => {
       const s = (await db.ref('players').get()).val() || {};
       const tm = !!(await db.ref('config/test_mode').get()).val();
       const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === 7 && !!s[i].test === tm);
-      if (ids.length < 2) return res.status(400).json({ error: 'Need at least 2 active players on Day 7 (there are ' + ids.length + ').' });
+      if (ids.length < 2) return res.status(400).json({ error: 'Need at least 2 active players on Day 7 (there are ' + ids.length + ').' + tmHint(s, 7, tm) });
       const { rooms, spec } = D7.buildRooms(ids, c);
       const now = Date.now(), run = { start: now + c.lobby * 1000, mazeEnd: now + c.lobby * 1000 + c.mazeMin * 60000, cfg: c, rooms: {} };
       const up = { d7: null, rooms7: null, d7meta: null, d7trace: null };
@@ -153,7 +163,7 @@ module.exports = async (req, res) => {
       const s = (await db.ref('players').get()).val() || {};
       const tm = !!(await db.ref('config/test_mode').get()).val();
       const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === 5 && !!s[i].test === tm);
-      if (ids.length < 3) return res.status(400).json({ error: 'Need at least 3 active players on Day 5 (there are ' + ids.length + ').' });
+      if (ids.length < 3) return res.status(400).json({ error: 'Need at least 3 active players on Day 5 (there are ' + ids.length + ').' + tmHint(s, 5, tm) });
       const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
       shuffle(ids);
       const g = Math.max(1, Math.floor(ids.length / 4));
@@ -348,6 +358,7 @@ module.exports = async (req, res) => {
       const s = (await db.ref('players').get()).val() || {};
       const tm = !!(await db.ref('config/test_mode').get()).val();
       const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === d && !!s[i].test === tm);
+      if (ids.length < 2) return res.status(400).json({ error: 'Need at least 2 active players on Day ' + d + ' (there are ' + ids.length + ').' + tmHint(s, d, tm) });
       for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
       await db.ref('pairs/day' + d).remove();
       const up = {};
