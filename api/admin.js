@@ -1,4 +1,4 @@
-const { admin, db, maintain, closeNow, newId, secLog, sign, phase5, label5 } = require('./_lib');
+const { admin, db, maintain, closeNow, newId, secLog, sign, phase5, label5, resolveMaze7 } = require('./_lib');
 const D6 = require('./_d6');
 const D7 = require('./_d7');
 const { simulate } = require('./_sim');
@@ -43,13 +43,15 @@ module.exports = async (req, res) => {
       const d6links = (await db.ref('d6links').get()).val() || {};
       const d7 = (await db.ref('d7').get()).val() || {};
       const d7cfg = D7.cfg((await db.ref('config/day7').get()).val());
+      const d7run = (await db.ref('config/day7run').get()).val();
+      const d7rooms = (await db.ref('rooms7').get()).val() || {};
       const d7done = (await db.ref('d7meta/done').get()).val() || 0;
       const testMode = !!(await db.ref('config/test_mode').get()).val();
       const players = pl.val() || {};
       Object.keys(players).forEach(k => { delete players[k].sid; delete players[k].ipk; });   // session internals never leave the server
       const sec = [];
       (await db.ref('seclog').orderByKey().limitToLast(40).get()).forEach(c => { sec.push(c.val()); });
-      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, day7: { cfg: d7cfg, data: d7, done: d7done, units: D7.units(d7cfg) }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, day7: { cfg: d7cfg, run: d7run ? { start: d7run.start, mazeEnd: d7run.mazeEnd, resolved: !!d7run.resolved } : null, rooms: d7rooms, data: d7, done: d7done, units: D7.units(d7cfg) }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       const mins = Number(req.body.minutes) > 0 ? Number(req.body.minutes) : 1200;
@@ -78,11 +80,47 @@ module.exports = async (req, res) => {
       await db.ref('config/day6').set({ minutes, cut, side });
     }
     else if (action === 'setDay7') {
-      // seed: a new random seed gives every player brand new mazes (use it before the day starts, never during)
+      // seed: a new random seed gives every room brand new mazes (use it before the maze starts, never during)
       const b = req.body, cur = D7.cfg((await db.ref('config/day7').get()).val());
-      const next = D7.cfg({ minutes: b.minutes, levels: b.levels, size: b.size, segs: b.segs, cut: b.cut, seed: b.newSeed ? Math.random().toString(36).slice(2, 10) : cur.seed });
+      const f = {}; ['mazeMin', 'ropeMin', 'roomSize', 'lobby', 'size', 'segs', 'cut', 'need', 'minKills', 'zone', 'lives'].forEach(k => { f[k] = b[k] === '' || b[k] == null ? cur[k] : b[k]; });
+      const next = D7.cfg({ ...f, seed: b.newSeed ? Math.random().toString(36).slice(2, 10) : cur.seed });
       await db.ref('config/day7').set(next);
       return res.json({ cfg: next });
+    }
+    else if (action === 'start7') {
+      // Forms the rooms (half hunters, half survivors, same number in each), assigns roles and opens the maze after the lobby.
+      // An odd player becomes a spectator and goes to the rope when the maze ends. Settings are frozen in the run.
+      const c = D7.cfg((await db.ref('config/day7').get()).val());
+      const s = (await db.ref('players').get()).val() || {};
+      const tm = !!(await db.ref('config/test_mode').get()).val();
+      const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === 7 && !!s[i].test === tm);
+      if (ids.length < 2) return res.status(400).json({ error: 'Need at least 2 active players on Day 7 (there are ' + ids.length + ').' });
+      const { rooms, spec } = D7.buildRooms(ids, c);
+      const now = Date.now(), run = { start: now + c.lobby * 1000, mazeEnd: now + c.lobby * 1000 + c.mazeMin * 60000, cfg: c, rooms: {} };
+      const up = { d7: null, rooms7: null, d7meta: null, d7trace: null };
+      rooms.forEach((members, k) => {
+        const rid = 'r' + Math.random().toString(36).slice(2, 8), m = D7.roomMaze(c, 'r' + k + rid);
+        run.rooms[rid] = { k: 'r' + k + rid };
+        const half = members.length / 2, cells = D7.tpCells(m, c), sp = D7.cellXY(m.n, m.start);
+        const shuffled = members.slice().sort(() => Math.random() - 0.5);
+        shuffled.forEach((u, i) => {
+          const role = i < half ? 'hunter' : 'survivor', pos = role === 'hunter' ? D7.cellXY(m.n, cells[Math.floor(Math.random() * cells.length)]) : sp;
+          up[`rooms7/${rid}/m/${u}`] = { role, i };
+          up[`rooms7/${rid}/p/${u}`] = { x: pos.x, y: pos.y, at: now, inv: 0, deaths: 0, kills: 0 };
+          up[`d7/${u}`] = { role, room: rid, state: 'maze' };
+        });
+      });
+      if (spec) up[`d7/${spec}`] = { role: 'spec', state: 'maze' };
+      up['config/day7run'] = run;
+      await db.ref().update(up);
+      return res.json({ rooms: rooms.length, players: ids.length, spectator: !!spec });
+    }
+    else if (action === 'end7') {
+      // Ends the live maze right now (the same as the timer reaching zero)
+      const run = (await db.ref('config/day7run').get()).val();
+      if (!run) return res.status(400).json({ error: 'The maze has not been started.' });
+      if (!run.resolved) { await db.ref('config/day7run/mazeEnd').set(Date.now()); await resolveMaze7(Date.now()); }
+      return res.json({ ok: true });
     }
     else if (action === 'start5') {
       // Forms groups of about 4 from the active Day 5 players, picks one secret traitor per group,
@@ -119,6 +157,7 @@ module.exports = async (req, res) => {
       ['p1', 'p4', 'p7', 'cancel'].forEach(k => { if (P[k] !== '' && P[k] != null) o[k] = Math.min(1, Math.max(0, Number(P[k]) / 100)); });
       if (P.cut6 !== '' && P.cut6 != null) o.cut6 = Number(P.cut6);
       if (P.cut7 !== '' && P.cut7 != null) o.cut7 = Number(P.cut7);
+      if (P.need7 !== '' && P.need7 != null) o.need7 = Number(P.need7);
       if (P.side6 === 'warm' || P.side6 === 'cold') o.side6 = P.side6;
       return res.json(simulate(Number(b.bots), days, Number(b.runs), o));
     }
@@ -140,7 +179,9 @@ module.exports = async (req, res) => {
       const cur = (await db.ref('players').get()).val() || {};
       const tests = Object.keys(cur).filter(i => cur[i].test), set = new Set(tests);
       const up = {};
-      for (const u of tests) { up['players/' + u] = null; up['d6/' + u] = null; up['d15/votes/' + u] = null; up['day3/choices/' + u] = null; up['d6links/' + u] = null; up['d7/' + u] = null; for (let l = 0; l < 6; l++) up['d7trace/L' + l + '/' + u] = null; }
+      for (const u of tests) { up['players/' + u] = null; up['d6/' + u] = null; up['d15/votes/' + u] = null; up['day3/choices/' + u] = null; up['d6links/' + u] = null; up['d7/' + u] = null; }
+      const rm = (await db.ref('rooms7').get()).val() || {};
+      Object.keys(rm).forEach(r => Object.keys(rm[r].m || {}).forEach(u => { if (set.has(u)) { up[`rooms7/${r}/m/${u}`] = null; up[`rooms7/${r}/p/${u}`] = null; } }));
       const links = (await db.ref('d6links').get()).val() || {};
       Object.keys(links).forEach(b => Object.keys(links[b] || {}).forEach(x => { if (set.has(x)) up['d6links/' + b + '/' + x] = null; }));
       const groups = (await db.ref('groups/day5').get()).val() || {};
@@ -195,16 +236,24 @@ module.exports = async (req, res) => {
       } else if (day === 6) {
         for (const b of bots) { await botPlay6(db, b, now); n++; }
       } else if (day === 7) {
-        // Bots "play" the hour: some finish with a random time, others stop part-way
-        const c7 = D7.cfg((await db.ref('config/day7').get()).val()), cur = (await db.ref('d7').get()).val() || {};
-        for (const b of bots) {
-          if (cur[b] && cur[b].done) continue;
-          const start = now - Math.floor((15 + Math.random() * 40) * 60000);
-          const finishes = Math.random() < 0.6, tot = D7.units(c7);
-          const s = { start, stage: finishes ? 'rope' : 'maze', level: c7.levels, lvlStart: start, caught: Math.floor(Math.random() * 8), falls: Math.floor(Math.random() * 12), cp: 0 };
-          if (finishes) { s.done = true; s.finished = now; s.total = now - start; s.prog = tot; await db.ref('d7meta/done').transaction(x => (x || 0) + 1); }
-          else s.prog = Math.random() * (tot - 1);
-          await db.ref('d7/' + b).set(s); n++;
+        const run = (await db.ref('config/day7run').get()).val(), c7 = D7.cfg(run && run.cfg ? run.cfg : (await db.ref('config/day7').get()).val());
+        const cur = (await db.ref('d7').get()).val() || {};
+        if (run && !run.resolved && now < run.mazeEnd) {
+          // Maze is live: some survivors "escape" and hunters get a few kills, so the end of the maze can be tested
+          for (const b of bots) {
+            const s = cur[b]; if (!s || s.state !== 'maze') continue;
+            if (s.role === 'survivor' && Math.random() < 0.5) { up[`rooms7/${s.room}/p/${b}/gone`] = true; up[`d7/${b}/state`] = 'rope'; n++; }
+            else if (s.role === 'hunter') { up[`rooms7/${s.room}/p/${b}/kills`] = Math.floor(Math.random() * 5); n++; }
+          }
+        } else {
+          // Rope phase: some bots "finish" with a random time, others stop part-way
+          for (const b of bots) {
+            const s0 = cur[b]; if (s0 && s0.done) continue;
+            const rstart = now - Math.floor((5 + Math.random() * 20) * 60000), fin = Math.random() < 0.6;
+            const s = { ...(s0 || { role: 'none' }), state: 'rope', rstart, seg: fin ? c7.segs : 0, lvlStart: rstart, falls: Math.floor(Math.random() * 12) };
+            if (fin) { s.done = true; s.finished = now; s.total = now - rstart; s.prog = D7.units(c7); await db.ref('d7meta/done').transaction(x => (x || 0) + 1); } else s.prog = Math.random() * (c7.segs - 0.1);
+            up['d7/' + b] = s; n++;
+          }
         }
       } else return res.status(400).json({ error: 'Bots do not play Day ' + day + '. Play it yourself in a test tab.' });
       if (Object.keys(up).length) await db.ref().update(up);
