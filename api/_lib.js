@@ -154,9 +154,38 @@ async function resolveAll5(now) {
   for (const gid of Object.keys(groups)) await resolveGroup5(gid, cfg, now);
 }
 
+
+// ---- Day 7: end of the live maze ----
+// Survivors who did not escape are out. Hunters pass only if enough survivors in their room failed to escape
+// and they made enough kills. Spectators and everyone left go on to the rope. Runs once, from the first request after the maze ends.
+async function resolveMaze7(now, force) {
+  const run = (await db.ref('config/day7run').get()).val();
+  if (!run || run.resolved || (!force && now < run.mazeEnd)) return;
+  const tx = await db.ref('config/day7run/resolved').transaction(c => (c ? undefined : now));
+  if (!tx.committed) return;
+  const c = D7.cfg(run.cfg), d7 = (await db.ref('d7').get()).val() || {}, rooms = (await db.ref('rooms7').get()).val() || {};
+  const up = {}, done = {};
+  const out = (id, extra) => { done[id] = 1; up[`players/${id}/status`] = 'eliminated'; up[`players/${id}/eliminated_day`] = 7; up[`players/${id}/reveal`] = { day: 7, ok: false, phase: 'maze', ...extra }; up[`d7/${id}/state`] = 'out'; };
+  for (const rid of Object.keys(rooms)) {
+    const mem = rooms[rid].m || {}, P = rooms[rid].p || {}, ids = Object.keys(mem);
+    const surv = ids.filter(u => mem[u].role === 'survivor'), hunt = ids.filter(u => mem[u].role === 'hunter');
+    const failed = surv.filter(u => d7[u] && d7[u].state === 'maze');
+    const win = failed.length >= Math.ceil(surv.length * c.need / 100);
+    failed.forEach(u => out(u, { role: 'survivor' }));
+    hunt.forEach(u => {
+      const k = (P[u] && P[u].kills) || 0;
+      if (!(d7[u] && d7[u].state === 'maze')) return;
+      if (win && k >= c.minKills) { done[u] = 1; up[`d7/${u}/state`] = 'rope'; } else out(u, { role: 'hunter', kills: k, team: win });
+    });
+  }
+  Object.keys(d7).forEach(u => { if (d7[u].state === 'maze' && !done[u]) up[`d7/${u}/state`] = 'rope'; });   // spectators
+  if (Object.keys(up).length) await db.ref().update(up);
+}
+
 // Closes a day: everyone who did not complete it is eliminated; days with a ranking resolve it here.
 async function closeDay(day) {
   if (day === 5) await resolveAll5(Date.now());
+  if (day === 7) await resolveMaze7(Date.now(), true);
   const testMode = !!(await db.ref('config/test_mode').get()).val();   // test mode: only test players take part
   const players = (await db.ref('players').get()).val() || {};
   const up = {};
@@ -229,15 +258,16 @@ async function closeDay(day) {
       if (out) elim(r.id, reveal); else pass(r.id, reveal);
     });
   } else if (day === 7) {
-    // Finishers are ranked by total time, everyone else by progress. The slowest cut% are eliminated;
-    // nobody who never moved can pass.
-    const cfg = D7.cfg((await db.ref('config/day7').get()).val());
+    // Rope ranking: finishers by rope time, the rest by progress. The slowest cut% are eliminated;
+    // anyone who never started the rope is out. (The maze phase already eliminated its losers.)
+    const run = (await db.ref('config/day7run').get()).val();
+    const cfg = D7.cfg(run && run.cfg ? run.cfg : (await db.ref('config/day7').get()).val());
     const all = (await db.ref('d7').get()).val() || {};
-    const order = D7.rank(players, all, pending);
+    const order = D7.rank(all, pending);
     const started = order.filter(id => all[id] && (all[id].done || all[id].prog > 0));
     const nOut = Math.floor(started.length * cfg.cut / 100);
     const keep = new Set(started.slice(0, started.length - nOut));
-    order.forEach(id => { const ok = keep.has(id), reveal = { day: 7, ok, finished: !!(all[id] && all[id].done) }; if (ok) pass(id, reveal); else elim(id, reveal); });
+    order.forEach(id => { const ok = keep.has(id), reveal = { day: 7, ok, finished: !!(all[id] && all[id].done), phase: 'rope' }; if (ok) pass(id, reveal); else elim(id, reveal); });
   } else pending.forEach(id => elim(id));
   if (Object.keys(up).length) await db.ref().update(up);
 }
@@ -261,4 +291,4 @@ async function closeNow() {
   const day = ((await db.ref('config/active_day').get()).val()) || 1;
   return closeOnce(day);
 }
-module.exports = { admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
+module.exports = { resolveMaze7, admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
