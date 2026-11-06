@@ -117,7 +117,8 @@ module.exports = async (req, res) => {
       if (ids.length < 2) return res.status(400).json({ error: 'Need at least 2 active players on Day 7 (there are ' + ids.length + ').' + tmHint(s, 7, tm) });
       const { rooms, spec } = D7.buildRooms(ids, c);
       const now = Date.now(), run = { start: now + c.lobby * 1000, mazeEnd: now + c.lobby * 1000 + c.mazeMin * 60000, cfg: c, rooms: {} };
-      const up = { d7: null, rooms7: null, d7meta: null, d7trace: null };
+      await wipe7();   // old rooms and progress go first (a single update cannot contain a path and its children)
+      const up = {};
       rooms.forEach((members, k) => {
         const rid = 'r' + Math.random().toString(36).slice(2, 8), m = D7.roomMaze(c, 'r' + k + rid);
         run.rooms[rid] = { k: 'r' + k + rid };
@@ -372,5 +373,5 @@ module.exports = async (req, res) => {
       return res.json({ paired: ids.length });
     } else return res.status(400).json({ error: 'bad action' });
     res.json({ ok: true });
-  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error' }); }
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Server error: ' + String((e && e.message) || e).slice(0, 200) }); }
 };
