@@ -4,6 +4,15 @@ const D7 = require('./_d7');
 const { simulate } = require('./_sim');
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 
+// Day 7 leftovers: the maze run, rooms and every player's progress. Called when Day 7 is reactivated or reset.
+async function wipe7() { await Promise.all(['d7', 'rooms7', 'd7meta', 'd7trace', 'config/day7run'].map(p => db.ref(p).remove())); }
+// One player's Day 7 progress (used when the admin revives or moves that player)
+async function wipePlayer7(id) {
+  const u = String(id).toUpperCase(), d = (await db.ref('d7/' + u).get()).val(), up = { ['d7/' + u]: null };
+  if (d && d.room) { up[`rooms7/${d.room}/m/${u}`] = null; up[`rooms7/${d.room}/p/${u}`] = null; }
+  await db.ref().update(up);
+}
+
 // A test player plays the whole Day 6 script at random (skips the minimum reading time)
 async function botPlay6(db, u, now) {
   const st = (await db.ref('d6/' + u).get()).val() || { start: now, idx: 0, shown: now, cold: 0 };
@@ -59,14 +68,15 @@ module.exports = async (req, res) => {
       await db.ref('day' + String(Number(value)).replace('.', '_')).remove(); // old test data for that day
       if (Number(value) === 1.5) await db.ref('d15').remove();
       if (Number(value) === 6) await Promise.all([db.ref('d6').remove(), db.ref('d6links').remove()]);
+      if (Number(value) === 7) await wipe7();
       if (Number(value) === 5) await Promise.all([db.ref('groups/day5').remove(), db.ref('chats/day5').remove(), db.ref('config/day5').remove()]);
     } else if (action === 'close') {
       return res.json({ closed: await closeNow() });
     } else if (action === 'status' && ['active', 'eliminated', 'winner'].includes(value)) {
       const p = (await pref.get()).val(); if (!p) return res.status(404).json({ error: 'not found' });
-      await db.ref('d6/' + String(id).toUpperCase()).remove();
+      await db.ref('d6/' + String(id).toUpperCase()).remove(); await wipePlayer7(id);
       await pref.update({ status: value, reveal: null, d1_start: null, d1_done: null, d4_tries: null, g5: null, eliminated_day: value === 'eliminated' ? p.current_day : null });
-    } else if (action === 'playerDay' && value >= 1 && value <= 9) { await db.ref('d6/' + String(id).toUpperCase()).remove(); await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, g5: null }); }
+    } else if (action === 'playerDay' && value >= 1 && value <= 9) { await db.ref('d6/' + String(id).toUpperCase()).remove(); await wipePlayer7(id); await pref.update({ current_day: Number(value), reveal: null, d1_start: null, d1_done: null, pair: null, d4_tries: null, g5: null }); }
     else if (action === 'setDay4') {
       const c = String(req.body.code || '');
       if (!/^\d{4}$/.test(c)) return res.status(400).json({ error: 'code must be 4 digits' });
@@ -114,6 +124,18 @@ module.exports = async (req, res) => {
       up['config/day7run'] = run;
       await db.ref().update(up);
       return res.json({ rooms: rooms.length, players: ids.length, spectator: !!spec });
+    }
+    else if (action === 'reset7') {
+      // Clears every trace of the Day 7 maze and rope: rooms, roles, progress, the run. With revive, players
+      // eliminated on Day 7 come back as active players on Day 7 (reveal cleared). Players who already passed are not touched.
+      await wipe7();
+      let revived = 0;
+      if (req.body.revive) {
+        const all = (await db.ref('players').get()).val() || {}, up = {};
+        Object.keys(all).forEach(i => { if (all[i].status === 'eliminated' && all[i].eliminated_day === 7) { up[`players/${i}/status`] = 'active'; up[`players/${i}/current_day`] = 7; up[`players/${i}/reveal`] = null; up[`players/${i}/eliminated_day`] = null; revived++; } });
+        if (revived) await db.ref().update(up);
+      }
+      return res.json({ ok: true, revived });
     }
     else if (action === 'end7') {
       // Ends the live maze right now (the same as the timer reaching zero)
