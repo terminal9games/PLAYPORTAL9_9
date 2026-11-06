@@ -1,6 +1,7 @@
-const { db, sign, verify, maintain, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, IP_MSG } = require('./_lib');
+const { resolveMaze7, db, sign, verify, maintain, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, IP_MSG } = require('./_lib');
 const D6 = require('./_d6');
 const D7 = require('./_d7');
+const L7 = require('./_d7live');
 
 // Chat filter for Day 2. Runs on the server only, so it can't be bypassed from the browser.
 // The raw text is never stored: only the censored version reaches the database.
@@ -107,7 +108,8 @@ module.exports = async (req, res) => {
       await ref.update(upd); p = await load();
     } else if (!adm) {   // admin test tabs skip the session and network rules
       if (p.sid !== sid) return res.status(401).json({ error: 'You were signed out: this ID was opened on another device.', kicked: true });
-      if (ipk && !(await ipTouch(ipk, uid, now))) return res.status(403).json({ error: IP_MSG, ipblock: true });
+      const fast = action === 'd7sync' || action === 'd7spec';   // sent several times a second: network rules are checked on the 20 s heartbeat instead
+      if (ipk && (!fast || !p.seen || now - p.seen > 20000) && !(await ipTouch(ipk, uid, now))) return res.status(403).json({ error: IP_MSG, ipblock: true });
       if (!p.seen || now - p.seen > 20000) await ref.update({ seen: now });
     }
 
@@ -327,48 +329,38 @@ module.exports = async (req, res) => {
       };
     };
 
-    // Day 7 (Dark Maze + Tightrope): one continuous hour. The server owns the clock and checks that nobody
-    // is faster than possible; the browser only draws. Progress is saved so a reload resumes where you were.
-    let d7 = null, cfg7 = D7.cfg(null), d7over = false;
+    // Day 7: a live maze (hunters against survivors, run by _d7live.js) and then a solo tightrope.
+    // The admin starts the maze; rooms and roles are fixed then. Everything is decided on the server.
+    let d7 = null, cfg7 = D7.cfg(null), run7 = null, d7over = false;
     if (day === 7 && live()) {
-      cfg7 = D7.cfg((await db.ref('config/day7').get()).val());
+      run7 = (await db.ref('config/day7run').get()).val();
+      cfg7 = D7.cfg(run7 && run7.cfg ? run7.cfg : (await db.ref('config/day7').get()).val());
+      if (run7 && !run7.resolved && now >= run7.mazeEnd) { await resolveMaze7(now); run7 = (await db.ref('config/day7run').get()).val(); p = await load(); }
       d7 = (await db.ref('d7/' + uid).get()).val();
-      d7over = !!(d7 && d7.start && !d7.done && now > d7.start + cfg7.minutes * 60000 + GRACE);
+      if (!d7 && run7 && now >= run7.mazeEnd && p.status === 'active') { d7 = { state: 'rope', role: 'none' }; await db.ref('d7/' + uid).set(d7); }   // arrived after the maze: straight to the rope
+      d7over = !!(d7 && d7.rstart && !d7.done && now > d7.rstart + cfg7.ropeMin * 60000 + GRACE);
     }
-    if (action === 'd7start' && day === 7 && live() && !d7) {
-      d7 = { start: now, stage: 'maze', level: 0, lvlStart: now, prog: 0, caught: 0, falls: 0, cp: 0 };
-      await db.ref('d7/' + uid).set(d7);
-    }
-    if (day === 7 && live() && d7 && d7.start && !d7.done && !d7over) {
+    if (day === 7 && live() && d7 && run7) {
+      if (action === 'd7sync' && d7.state === 'maze' && d7.role !== 'spec') return res.json({ sync: await L7.sync(uid, d7, run7, now, req.body), now });
+      if (action === 'd7spec' && d7.state === 'maze' && d7.role === 'spec') return res.json({ sync: await L7.spec(uid, d7, run7, now, req.body), now });
       const finish = async () => {
-        d7.done = true; d7.finished = now; d7.total = now - d7.start; d7.prog = D7.units(cfg7);
+        d7.done = true; d7.finished = now; d7.total = now - d7.rstart; d7.prog = D7.units(cfg7);
         await db.ref('d7meta/done').transaction(x => (x || 0) + 1);
       };
-      if (action === 'd7level' && d7.stage === 'maze' && req.body.level === d7.level) {
-        if (now - d7.lvlStart < D7.level(cfg7, d7.level).minMs) return res.status(400).json({ error: 'Too fast.' });
-        d7.level++; d7.lvlStart = now; d7.cp = 0; d7.prog = d7.level;
-        if (d7.level >= cfg7.levels) { d7.stage = 'rope'; d7.seg = 0; }
+      if (action === 'd7rope' && d7.state === 'rope' && !d7.rstart) {
+        Object.assign(d7, { rstart: now, seg: 0, lvlStart: now, prog: 0, falls: 0 });
         await db.ref('d7/' + uid).set(d7);
-      } else if (action === 'd7seg' && d7.stage === 'rope' && req.body.seg === d7.seg) {
-        if (now - d7.lvlStart < D7.rope(cfg7, d7.seg).minMs) return res.status(400).json({ error: 'Too fast.' });
-        d7.seg++; d7.lvlStart = now; d7.prog = cfg7.levels + d7.seg;
-        if (d7.seg >= cfg7.segs) await finish();
-        await db.ref('d7/' + uid).set(d7);
-      } else if (action === 'd7ping') {
-        // Progress inside the current level or segment (0..1), counters, checkpoint and a sample of the route walked
-        const done = d7.stage === 'maze' ? d7.level : cfg7.levels + d7.seg, f = Math.min(0.99, Math.max(0, Number(req.body.frac) || 0));
-        d7.prog = Math.max(d7.prog || 0, done + f);
-        d7.caught = Math.min((d7.caught || 0) + 50, Math.max(d7.caught || 0, Math.floor(Number(req.body.caught) || 0)));
-        d7.falls = Math.min((d7.falls || 0) + 50, Math.max(d7.falls || 0, Math.floor(Number(req.body.falls) || 0)));
-        if (d7.stage === 'maze') {
-          const cp = Math.floor(Number(req.body.cp) || 0); if (cp > (d7.cp || 0) && cp <= 2) d7.cp = cp;
-          const n = D7.level(cfg7, d7.level).n, cells = (Array.isArray(req.body.cells) ? req.body.cells : []).slice(0, 80).map(Number).filter(c => Number.isInteger(c) && c >= 0 && c < n * n);
-          if (cells.length) {
-            const tr = ((await db.ref(`d7trace/L${d7.level}/${uid}`).get()).val()) || [];
-            await db.ref(`d7trace/L${d7.level}/${uid}`).set(tr.concat(cells).slice(-600));
-          }
+      } else if (d7.state === 'rope' && d7.rstart && !d7.done && !d7over) {
+        if (action === 'd7seg' && req.body.seg === d7.seg) {
+          if (now - d7.lvlStart < D7.rope(cfg7, d7.seg).minMs) return res.status(400).json({ error: 'Too fast.' });
+          d7.seg++; d7.lvlStart = now; d7.prog = d7.seg;
+          if (d7.seg >= cfg7.segs) await finish();
+          await db.ref('d7/' + uid).set(d7);
+        } else if (action === 'd7ping') {
+          d7.prog = Math.max(d7.prog || 0, d7.seg + Math.min(0.99, Math.max(0, Number(req.body.frac) || 0)));
+          d7.falls = Math.min((d7.falls || 0) + 50, Math.max(d7.falls || 0, Math.floor(Number(req.body.falls) || 0)));
+          await db.ref('d7/' + uid).set(d7);
         }
-        await db.ref('d7/' + uid).set(d7);
       }
     }
 
@@ -382,19 +374,22 @@ module.exports = async (req, res) => {
     };
 
     const day7view = async () => {
-      const mins = cfg7.minutes;
-      if (action === 'd7ping' && d7 && d7.start) return { screen: 'day7ping', escaped: (await db.ref('d7meta/done').get()).val() || 0 };
-      if (!d7 || !d7.start) return { screen: 'day7intro', minutes: mins };
+      if (action === 'd7ping' && d7 && d7.rstart) return { screen: 'day7ping', escaped: (await db.ref('d7meta/done').get()).val() || 0 };
+      const mazeLive = run7 && now >= run7.start && now < run7.mazeEnd;
+      if (!d7 || (d7.state === 'maze' && !mazeLive)) {
+        // before the admin starts the maze, or during the lobby countdown
+        if (d7 && run7 && now < run7.start) return { screen: 'day7lobby', startsAt: run7.start, now, role: d7.role, minutes: cfg7.mazeMin };
+        return { screen: 'day7lobby', startsAt: run7 ? run7.start : null, now, role: null, minutes: cfg7.mazeMin };
+      }
+      if (d7.state === 'maze') {
+        if (d7.role === 'spec') return { screen: 'day7spec', endsAt: run7.mazeEnd, now };
+        const room = run7.rooms[d7.room], m = D7.roomMaze(run7.cfg, room.k), mem = ((await db.ref(`rooms7/${d7.room}/m/${uid}`).get()).val()) || {};
+        return { screen: 'day7m', role: d7.role, me: mem.i, maze: D7.wire(m), zone: run7.cfg.zone, endsAt: run7.mazeEnd, now, hit: D7.HIT };
+      }
       const escaped = (await db.ref('d7meta/done').get()).val() || 0;
+      if (!d7.rstart) return { screen: 'day7ropeintro', minutes: cfg7.ropeMin, role: d7.role, wait: run7 && now < run7.mazeEnd ? run7.mazeEnd - now : 0, escaped };
       if (d7.done || d7over) return { screen: 'day7wait', finished: !!d7.done, escaped };
-      const out = { screen: 'day7', stage: d7.stage, endsAt: d7.start + mins * 60000, now: Date.now(), escaped, levels: cfg7.levels, segs: cfg7.segs, caught: d7.caught || 0, falls: d7.falls || 0 };
-      if (d7.stage === 'maze') {
-        const m = D7.level(cfg7, d7.level);
-        const raw = (await db.ref(`d7trace/L${d7.level}`).orderByKey().limitToLast(8).get()).val() || {};
-        const ids = Object.keys(raw).filter(i => i !== uid).sort(() => Math.random() - 0.5).slice(0, 3);
-        Object.assign(out, { level: d7.level, cp: d7.cp || 0, maze: D7.wire(m), traces: ids.map(i => raw[i]) });
-      } else Object.assign(out, { seg: d7.seg, rope: D7.rope(cfg7, d7.seg) });
-      return out;
+      return { screen: 'day7', stage: 'rope', endsAt: d7.rstart + cfg7.ropeMin * 60000, now, escaped, segs: cfg7.segs, seg: d7.seg, falls: d7.falls || 0, rope: D7.rope(cfg7, d7.seg) };
     };
 
     let view;
