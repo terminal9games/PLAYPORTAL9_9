@@ -29,6 +29,7 @@
 </style>
 </head>
 <body>
+<div id="tbanner" style="display:none;position:sticky;top:0;z-index:50;background:#b00020;color:#fff;font:700 13px sans-serif;padding:8px 12px;text-align:center">TEST MODE IS ON: pairing, groups, the maze and closing a day only involve TEST players. Real players are ignored. <button id="tbOff">Turn off</button></div>
 
 <div id="loginCard" class="card" style="max-width:380px">
   <h1>Admin login</h1>
@@ -208,7 +209,8 @@ async function openAs(id) {
 }
 $('tList').onclick = e => { const b = e.target.closest('button'); if (b) openAs(b.dataset.play); };
 const tmsg = t => { $('tMsg').textContent = t; setTimeout(() => $('tMsg').textContent = '', 4000); };
-$('tmode').onchange = async () => { await adm('setTestMode', { on: $('tmode').checked }); tmsg($('tmode').checked ? 'Test mode on' : 'Test mode off'); };
+$('tbOff').onclick = async () => { await adm('setTestMode', { on: false }); load(); };
+$('tmode').onchange = async () => { await adm('setTestMode', { on: $('tmode').checked }); tmsg($('tmode').checked ? 'Test mode on' : 'Test mode off'); load(); };
 $('tMake').onclick = async () => { const r = await adm('createTest', { count: Number($('tCount').value), day: Number($('tDay').value) }); tmsg(r.error || r.created + ' created'); load(); };
 $('tBots').onclick = async () => { const r = await adm('simBots'); tmsg(r.error || r.bots + ' bots played Day ' + r.day); load(); };
 $('tDel').onclick = async () => { if (!confirm('Delete ALL test players and their data? Real players are not touched.')) return; const r = await adm('deleteTest'); tmsg(r.error || r.deleted + ' deleted'); load(); };
@@ -244,7 +246,7 @@ $('d7end').onclick = async () => { if (!confirm('End the maze for everyone now?'
 let first = true;
 async function load() {
   const { players, activeDay, endsAt, closed, now, day4, day5, day6, day7, seclog, testMode } = await adm('list');
-  $('tmode').checked = !!testMode;
+  $('tmode').checked = !!testMode; $('tbanner').style.display = testMode ? 'block' : 'none';
   const tids = Object.keys(players).filter(i => players[i].test).sort();
   $('tList').innerHTML = tids.length ? tids.map(i => `<button data-play="${esc(i)}">${esc(i.slice(3))} (day ${esc(players[i].current_day)}, ${esc(players[i].status)})</button>`).join(' ') : 'No test players yet.';
   if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; const c6 = (day6 && day6.cfg) || {}; $('d6m').value = c6.minutes || 40; $('d6c').value = c6.cut == null ? 40 : c6.cut; $('d6s').value = c6.side || 'cold'; first = false; }
