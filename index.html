@@ -1,0 +1,1384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Terminal 9</title>
+<link rel="icon" href="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root { --cyan:#00f3ff; --red:#ff0055; --green:#39ff14; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body { background:radial-gradient(ellipse at top,#14141a 0%,#0a0a0c 60%); color:#fff; font-family:'Montserrat',sans-serif; }
+  .screen { position:fixed; inset:0; display:none; flex-direction:column; align-items:center; justify-content:center; text-align:center; padding:20px; }
+  .screen.on { display:flex; animation:in .6s ease both; }
+  .brand { display:flex; gap:10px; align-items:center; font-weight:700; font-size:18px; position:absolute; top:34px; }
+  .brand img { width:28px; height:28px; }
+  /* login */
+  h2 { font-size:14px; margin:0 0 14px; }
+  input { width:min(420px,86vw); padding:12px 16px; font:600 16px 'Montserrat',sans-serif; text-align:center; color:#fff; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:2px solid rgba(255,255,255,.4); border-radius:10px; outline:none; }
+  input:focus-visible { border-color:var(--cyan); box-shadow:0 0 14px rgba(0,243,255,.4); }
+  #err { color:var(--red); font-size:13px; min-height:20px; margin-top:12px; }
+  /* game */
+  #game { background:#fff; color:#111; }
+  #clock { font:700 44px 'Montserrat',sans-serif; color:#2ff5d0; text-shadow:0 0 14px #2ff5d0; font-variant-numeric:tabular-nums; margin-bottom:18px; }
+  #btn { width:56px; height:56px; border-radius:50%; background:#b00000; border:2px solid #333; cursor:pointer; }
+  #btn:active { transform:scale(.94); }
+  #ready { position:absolute; inset:0; background:rgba(128,128,128,.92); backdrop-filter:blur(8px); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:22px; color:#fff; font-size:13px; }
+  #ready button { padding:14px 40px; font:700 15px 'Montserrat',sans-serif; background:#fff; border:3px solid #f5e6a0; border-radius:14px; cursor:pointer; }
+  #cd { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font:700 54px 'Montserrat',sans-serif; color:#111; text-shadow:0 0 18px rgba(47,245,208,.8); opacity:0; transition:opacity .25s; pointer-events:none; z-index:2; }
+  #cd.show { opacity:1; }
+  /* day 2 */
+  #d2 { background:rgba(0,0,0,.4); }
+  .d2v { display:none; flex-direction:column; align-items:center; gap:18px; }
+  .d2v.on { display:flex; animation:in .6s ease both; }
+  .d2v h2 { font-size:22px; margin:0; }
+  .d2v p { margin:0; font-size:15px; }
+  .row2 { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .opt,.gbtn,.rbtn { padding:14px 34px; font:700 16px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.04); backdrop-filter:blur(16px); border:2px solid rgba(255,255,255,.45); border-radius:12px; cursor:pointer; }
+  .opt:hover { border-color:var(--cyan); box-shadow:0 0 14px rgba(0,243,255,.4); }
+  .gbtn { border-color:var(--green); color:var(--green); text-shadow:0 0 10px var(--green); box-shadow:0 0 16px rgba(57,255,20,.4); }
+  .rbtn { border-color:var(--red); color:var(--red); text-shadow:0 0 10px var(--red); box-shadow:0 0 16px rgba(255,0,85,.4); }
+  .dots i { font-style:normal; animation:blink 1.2s infinite; } .dots i:nth-child(2) { animation-delay:.25s; } .dots i:nth-child(3) { animation-delay:.5s; }
+  @keyframes blink { 0%,20% { opacity:0; } 40%,100% { opacity:1; } }
+  /* day 2 chat */
+  .chat { position:fixed; left:50%; bottom:0; transform:translateX(-50%); width:min(430px,96vw); z-index:4; display:none; }
+  .chat.on { display:block; }
+  #chatTab { display:block; width:100%; padding:11px 16px; font:700 13px 'Montserrat',sans-serif; color:#fff; background:rgba(20,20,26,.92); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.35); border-bottom:0; border-radius:12px 12px 0 0; cursor:pointer; }
+  #chatTab:hover,#chatTab:focus-visible { border-color:var(--cyan); outline:none; }
+  #chatDot { display:none; width:8px; height:8px; margin-left:8px; border-radius:50%; background:var(--red); box-shadow:0 0 8px var(--red); vertical-align:middle; }
+  #chatDot.on { display:inline-block; }
+  #chatPanel { display:none; flex-direction:column; height:min(46vh,340px); background:rgba(10,10,14,.94); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.35); border-bottom:0; border-top:1px solid rgba(255,255,255,.12); }
+  .chat.open #chatPanel { display:flex; animation:up .25s ease both; }
+  #chatLog { flex:1; overflow-y:auto; padding:12px 14px; text-align:left; font-size:13px; line-height:1.5; }
+  #chatLog .m { margin:0 0 8px; word-break:break-word; }
+  #chatLog .who { font-weight:700; margin-right:6px; color:#aaa; }
+  #chatLog .me .who { color:var(--cyan); }
+  #chatLog .empty { color:#888; text-align:center; margin-top:18px; }
+  #chatForm { display:flex; gap:8px; padding:10px; border-top:1px solid rgba(255,255,255,.12); }
+  #chatIn { flex:1; width:auto; padding:9px 12px; font-size:14px; text-align:left; border-width:1px; border-radius:8px; }
+  #chatSend { padding:9px 16px; font:700 13px 'Montserrat',sans-serif; color:var(--cyan); background:rgba(255,255,255,.04); border:1px solid var(--cyan); border-radius:8px; cursor:pointer; }
+  #chatNote { min-height:16px; padding:0 14px 8px; font-size:11px; color:var(--red); text-align:left; }
+  @keyframes up { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:none; } }
+  /* day 4 */
+  #term { width:min(560px,92vw); min-height:170px; padding:16px; margin-bottom:16px; text-align:left; white-space:pre-wrap; font:14px/1.7 'Courier New',monospace; color:#39ff14; text-shadow:0 0 6px rgba(57,255,20,.7); background:rgba(2,10,4,.85); border:1px solid rgba(57,255,20,.4); border-radius:10px; box-shadow:0 0 22px rgba(57,255,20,.18), inset 0 0 30px rgba(57,255,20,.06); }
+  #term::after { content:'_'; animation:blink 1s steps(1) infinite; }
+  #code { letter-spacing:12px; font-size:22px; width:min(240px,70vw); }
+  #d4err { color:var(--red); font-size:13px; min-height:18px; }
+  /* day 5: the traitor */
+  #d5 { justify-content:flex-start; padding-top:78px; }
+  .t5 { flex:1; min-height:0; width:min(560px,94vw); display:flex; flex-direction:column; gap:10px; }
+  #t5head { display:flex; justify-content:space-between; align-items:center; gap:10px; font:700 12px 'Montserrat',sans-serif; letter-spacing:1px; color:#aaa; text-align:left; }
+  #t5clock { font:700 28px 'Montserrat',sans-serif; color:var(--red); text-shadow:0 0 12px rgba(255,0,85,.6); font-variant-numeric:tabular-nums; }
+  #t5role { padding:8px 12px; border-radius:10px; border:1px solid; font-size:13px; line-height:1.5; text-align:left; background:rgba(255,255,255,.03); }
+  #t5role.crew { border-color:var(--cyan); color:var(--cyan); }
+  #t5role.traitor { border-color:var(--red); color:var(--red); text-shadow:0 0 8px rgba(255,0,85,.5); }
+  #t5log, #d8log { flex:1; min-height:0; overflow-y:auto; padding:12px 14px; text-align:left; font-size:13px; line-height:1.5; background:rgba(10,10,14,.94); border:1px solid rgba(255,255,255,.35); border-radius:10px; }
+  #t5log .m { margin:0 0 8px; word-break:break-word; }
+  #t5log .who { font-weight:700; margin-right:6px; color:#aaa; }
+  #t5log .me .who { color:var(--cyan); }
+  #t5log .sys { color:#ffd400; font-weight:600; }
+  #t5log .empty { color:#888; text-align:center; margin-top:18px; }
+  #d8log .m { margin:0 0 8px; word-break:break-word; } #d8log .who { font-weight:700; margin-right:6px; color:#aaa; } #d8log .me .who { color:var(--cyan); } #d8log .empty { color:#888; text-align:center; margin-top:18px; }
+  #d8in { flex:1; width:auto; padding:10px 12px; font-size:14px; text-align:left; border-width:1px; border-radius:8px; } #d8send { padding:10px 18px; font:700 13px 'Montserrat',sans-serif; color:var(--cyan); background:rgba(255,255,255,.04); border:1px solid var(--cyan); border-radius:8px; cursor:pointer; }
+  #t5vote { display:none; text-align:center; }
+  #t5vote.on { display:block; }
+  #t5vtitle { font-weight:700; font-size:14px; margin-bottom:8px; }
+  #t5btns { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+  #t5btns button { padding:9px 16px; font:700 13px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.45); border-radius:10px; cursor:pointer; }
+  #t5btns button:hover { border-color:var(--cyan); }
+  #t5btns button.sel { border-color:var(--green); color:var(--green); box-shadow:0 0 12px rgba(57,255,20,.4); }
+  #t5form { display:flex; gap:8px; }
+  #t5in { flex:1; width:auto; padding:10px 12px; font-size:14px; text-align:left; border-width:1px; border-radius:8px; }
+  #t5send { padding:10px 18px; font:700 13px 'Montserrat',sans-serif; color:var(--cyan); background:rgba(255,255,255,.04); border:1px solid var(--cyan); border-radius:8px; cursor:pointer; }
+  #t5send:disabled,#t5in:disabled { opacity:.5; cursor:default; }
+  #t5err { min-height:16px; font-size:11px; color:var(--red); text-align:left; }
+  /* day 6: sacrifices */
+  /* Day 7 */
+  #d7 { padding:0; justify-content:flex-start; background:#000; }
+  #d7cv { position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; }
+  #d7hud { position:absolute; top:10px; left:0; right:0; z-index:2; display:flex; justify-content:space-between; padding:0 16px; font:700 12px 'Montserrat',sans-serif; color:#8a8a99; letter-spacing:1px; pointer-events:none; font-variant-numeric:tabular-nums; }
+  #d7msg { position:absolute; left:0; right:0; top:42%; z-index:3; text-align:center; font:700 clamp(18px,4vw,28px) 'Montserrat',sans-serif; color:#fff; opacity:0; transition:opacity 1.2s ease; pointer-events:none; text-shadow:0 0 14px #000; }
+  #d7msg.on { opacity:1; }
+  #d8btn { position:absolute; left:50%; top:44px; transform:translateX(-50%); z-index:5; width:min(420px,86vw); padding:12px 16px; font:600 16px 'Montserrat',sans-serif; text-align:center; color:#ff4d5a; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:2px solid #ff4d5a; border-radius:10px; outline:none; cursor:pointer; display:none; transition:color .35s ease,border-color .35s ease,box-shadow .35s ease; }
+  #d8btn.green { color:#39ff14; border-color:#39ff14; box-shadow:0 0 18px rgba(57,255,20,.45); }
+  #d8btn.idle { color:#fff; border-color:rgba(255,255,255,.4); cursor:default; }
+  #d8btn.stab { color:#fff; border-color:#ff4d5a; box-shadow:0 0 18px rgba(255,77,90,.5); }
+  #d8wheel { position:absolute; inset:0; z-index:4; display:none; flex-direction:column; align-items:center; justify-content:center; gap:14px; background:rgba(0,0,0,.72); font-family:'Montserrat',sans-serif; text-align:center; }
+  #d8wheel b { font-size:clamp(34px,9vw,64px); letter-spacing:4px; font-variant-numeric:tabular-nums; }
+  #d8wheel span { font-size:13px; letter-spacing:3px; color:#9a9aa8; }
+  #d8res { position:absolute; left:0; right:0; top:22%; z-index:5; text-align:center; font:800 clamp(22px,5.5vw,40px) 'Montserrat',sans-serif; color:#fff; text-shadow:0 0 16px #000; opacity:0; transition:opacity .6s ease; pointer-events:none; padding:0 12px; }
+  #d8res.on { opacity:1; }
+  #d8feed { position:absolute; left:12px; bottom:12px; z-index:3; font:600 12px 'Montserrat',sans-serif; color:#cfcfda; text-shadow:0 0 6px #000; pointer-events:none; display:flex; flex-direction:column; gap:3px; }
+  #d8code { font:800 clamp(54px,16vw,96px) 'Montserrat',sans-serif; color:var(--cyan); text-shadow:0 0 22px rgba(0,243,255,.55); margin:0; line-height:1; }
+  #d8endlines p { margin:0 0 10px; font-size:16px; line-height:1.6; opacity:0; transition:opacity 1.4s ease; }
+  #d8endlines p.on { opacity:1; }
+
+  #d7catch { position:absolute; left:50%; top:62px; transform:translateX(-50%); z-index:5; width:min(420px,86vw); padding:12px 16px; font:600 16px 'Montserrat',sans-serif; text-align:center; color:#fff; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:2px solid rgba(255,255,255,.4); border-radius:10px; outline:none; cursor:pointer; }
+  #d7qte { position:absolute; inset:0; z-index:6; background:rgba(0,0,0,.72); }
+  #d7qt { position:absolute; top:9%; left:0; right:0; text-align:center; font:700 clamp(15px,3.4vw,22px) 'Montserrat',sans-serif; color:#fff; }
+  .qb { position:absolute; width:92px; height:92px; margin:-46px 0 0 -46px; border-radius:50%; background:#1b1b24; border:2px solid #fff; color:#fff; font:800 34px 'Montserrat',sans-serif; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }
+  .qb i { position:absolute; inset:-34px; border-radius:50%; border:4px solid #ff6b74; pointer-events:none; transform:scale(1); }
+  .qb.ok { background:#1d6b3a; } .qb.no { background:#6b1d1d; }
+
+  #d7snd { position:absolute; bottom:12px; right:12px; z-index:4; padding:6px 10px; font:700 11px 'Montserrat',sans-serif; color:#8a8a99; background:rgba(0,0,0,.5); border:1px solid #444; border-radius:8px; cursor:pointer; }
+  .t6 { width:min(560px,92vw); display:flex; flex-direction:column; gap:20px; align-items:center; }
+  #t6clock { position:absolute; top:84px; right:24px; font:700 13px 'Montserrat',sans-serif; color:#777; font-variant-numeric:tabular-nums; }
+  #t6txt { width:100%; white-space:pre-wrap; font-size:17px; line-height:1.7; text-align:center; min-height:96px; }
+  #t6opts { display:flex; flex-direction:column; gap:10px; width:100%; }
+  #t6opts button,#t6next,#t6ok { padding:13px 18px; font:700 15px 'Montserrat',sans-serif; color:#fff; background:rgba(255,255,255,.04); border:2px solid rgba(255,255,255,.4); border-radius:12px; cursor:pointer; }
+  #t6opts button:hover,#t6next:hover,#t6ok:hover { border-color:var(--cyan); }
+  #t6opts button.sel { border-color:var(--red); color:var(--red); box-shadow:0 0 14px rgba(255,0,85,.35); }
+  #t6opts button:disabled,#t6next:disabled,#t6ok:disabled { opacity:.5; cursor:default; }
+  .sacd { display:block; font-weight:400; font-size:12px; color:#aaa; margin-top:3px; }
+  #t6next,#t6ok { display:none; }
+  #t6in { width:min(420px,86vw); display:none; }
+  #t6err { min-height:16px; font-size:12px; color:var(--red); }
+  #t6w { position:fixed; bottom:20px; left:0; right:0; z-index:4; text-align:center; font:italic 600 13px 'Montserrat',sans-serif; color:#b88; opacity:0; transition:opacity 3s ease; pointer-events:none; }
+  #t6w.on { opacity:.9; }
+  /* day 1.5: the vote */
+  .v15 { width:min(520px,92vw); display:flex; flex-direction:column; gap:12px; align-items:center; }
+  .v15 h2 { font-size:26px; margin:0 0 4px; letter-spacing:3px; }
+  .v15row { width:100%; display:flex; justify-content:space-between; gap:12px; padding:11px 16px; font-size:14px; background:rgba(255,255,255,.03); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.3); border-radius:10px; }
+  .v15row b { font-variant-numeric:tabular-nums; }
+  #v15p { color:var(--green); text-shadow:0 0 10px rgba(57,255,20,.5); }
+  #v15t { margin:6px 0; font-size:13px; line-height:1.6; color:#ddd; }
+  #v15err { min-height:16px; font-size:12px; color:var(--red); }
+  /* streamer mode + settings */
+  #gear { position:fixed; right:18px; bottom:18px; z-index:6; width:46px; height:46px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,.04); backdrop-filter:blur(16px); border:1px solid rgba(255,255,255,.4); border-radius:50%; cursor:pointer; color:#fff; }
+  #gear:hover,#gear:focus-visible { border-color:var(--cyan); outline:none; }
+  #settings { z-index:8; }
+  #settings .box { border-color:rgba(255,255,255,.5); }
+  .setrow { display:flex; align-items:center; justify-content:space-between; gap:24px; width:min(380px,80vw); font:700 16px 'Montserrat',sans-serif; }
+  #sw { flex:none; width:58px; height:32px; border-radius:32px; border:2px solid #fff; background:#000; position:relative; cursor:pointer; transition:background .2s; }
+  #sw::after { content:''; position:absolute; top:3px; left:3px; width:22px; height:22px; border-radius:50%; background:#fff; transition:left .2s, background .2s; }
+  #sw[aria-checked="true"] { background:#fff; }
+  #sw[aria-checked="true"]::after { left:29px; background:#000; }
+  #sw:focus-visible { outline:2px solid var(--cyan); outline-offset:3px; }
+  .sethint { width:min(380px,80vw); margin:14px 0 22px; font:400 12px/1.6 'Montserrat',sans-serif; color:#bbb; }
+  body.stream .secret { filter:blur(9px); cursor:pointer; user-select:none; transition:filter .2s; }
+  body.stream .secret.show { filter:none; user-select:text; }
+  body.stream #t6w { pointer-events:auto; }
+  #streamTag { display:none; position:fixed; top:10px; left:12px; z-index:7; font:700 10px 'Montserrat',sans-serif; letter-spacing:2px; color:#fff; background:rgba(0,0,0,.6); border:1px solid rgba(255,255,255,.5); border-radius:6px; padding:4px 8px; }
+  body.stream #streamTag { display:block; }
+  .official { position:absolute; left:20px; right:84px; bottom:18px; font:400 11px/1.5 'Montserrat',sans-serif; color:#999; text-align:left; }
+  .official b { color:#ccc; }
+  /* result overlays for day 1.5 */
+  #blue .box { border-color:#00a2ff; box-shadow:0 0 22px rgba(0,162,255,.5), inset 0 0 22px rgba(0,162,255,.2); }
+  #blue h1 { color:#00a2ff; text-shadow:0 0 18px #00a2ff; }
+  #ended .box { border-color:var(--red); box-shadow:0 0 22px rgba(255,0,85,.5), inset 0 0 22px rgba(255,0,85,.2); }
+  #ended h1 { color:var(--red); text-shadow:0 0 18px var(--red); }
+  #ended p { max-width:420px; line-height:1.6; }
+  #ipw { z-index:9; }
+  #ipw .box { border-color:#ffd400; box-shadow:0 0 22px rgba(255,212,0,.4), inset 0 0 22px rgba(255,212,0,.15); }
+  #ipw h1 { color:#ffd400; font-size:clamp(22px,5vw,32px); }
+  #ipw p { max-width:440px; line-height:1.6; }
+  /* overlays */
+  .ov { position:fixed; inset:0; z-index:5; display:none; padding:34px; background:rgba(0,0,0,.72); backdrop-filter:blur(14px); }
+  .ov.on { display:block; animation:in .7s ease both; }
+  .ov .box { height:100%; border:3px solid; border-radius:14px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; position:relative; padding:20px; }
+  .ov h1 { margin:0; font-size:clamp(36px,9vw,56px); }
+  .ov p { margin:8px 0 0; font-size:15px; }
+  .ov small { position:absolute; bottom:16px; font-size:12px; }
+  .ov .brand { top:20px; }
+  #pass .box { border-color:var(--green); box-shadow:0 0 22px rgba(57,255,20,.5), inset 0 0 22px rgba(57,255,20,.2); }
+  #pass h1 { color:var(--green); text-shadow:0 0 18px var(--green); }
+  #elim .box { border-color:var(--red); box-shadow:0 0 22px rgba(255,0,85,.5), inset 0 0 22px rgba(255,0,85,.2); }
+  #elim h1 { color:var(--red); text-shadow:0 0 18px var(--red); }
+  /* fullscreen notice */
+  #fs { z-index:9; }
+  #fs .box { border-color:var(--cyan); box-shadow:0 0 22px rgba(0,243,255,.5), inset 0 0 22px rgba(0,243,255,.2); }
+  #fs h1 { color:var(--cyan); text-shadow:0 0 18px var(--cyan); font-size:clamp(24px,6vw,40px); }
+  #fs .row2 { margin-top:26px; }
+  @keyframes in { from { opacity:0; transform:scale(.96); } to { opacity:1; transform:none; } }
+  @media (prefers-reduced-motion:reduce) { .screen.on,.ov.on,.chat.open #chatPanel { animation:none; } }
+</style>
+</head>
+<body>
+
+<section id="login" class="screen on">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h2>LOGIN</h2>
+  <input id="uid" placeholder="Unique ID here" autocomplete="off" autocapitalize="characters" spellcheck="false">
+  <div id="err" role="alert"></div>
+  <div class="official">Official sites: <b>terminal9.vercel.app</b> and <b>playportal9.vercel.app</b>. Never share your ID with anyone. We will never ask for it.</div>
+</section>
+
+<section id="game" class="screen">
+  <div id="clock">60.00</div>
+  <button id="btn" aria-label="Press"></button>
+  <div id="cd"></div>
+  <div id="ready"><span>BEFORE STARTING READ THE INSTRUCTIONS</span><button id="go">Ready!</button></div>
+</section>
+
+<section id="d2" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="d2pick" class="d2v on">
+    <h2>Share or Steal?</h2>
+    <div class="row2"><button class="opt" data-c="share">Share</button><button class="opt" data-c="steal">Steal</button></div>
+  </div>
+  <div id="d2lock" class="d2v">
+    <h2>Lock your option?</h2>
+    <p>Your choice: <b id="mine" class="secret"></b></p>
+    <div class="row2"><button id="lockBtn" class="gbtn">Lock</button><button id="backBtn" class="rbtn">Select another one</button></div>
+  </div>
+  <div id="d3pick" class="d2v">
+    <h2>Choose a number</h2>
+    <div id="sv" class="secret" style="font:700 56px 'Montserrat',sans-serif;color:var(--cyan);text-shadow:0 0 18px var(--cyan)">50</div>
+    <input id="slider" type="range" min="0" max="100" step="1" value="50" style="width:min(320px,80vw);padding:0;border:0;background:none;accent-color:#00f3ff">
+    <button id="selBtn" class="opt">Select</button>
+  </div>
+  <div id="d3wait" class="d2v">
+    <h2>Your number is locked<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p>Waiting for the day to close. Come back later to see the result.</p>
+  </div>
+  <div id="d2wait" class="d2v">
+    <h2>Waiting for your rival to choose one<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p>You can close this page. Come back later to see the result.</p>
+  </div>
+  <div id="d2rev" class="d2v">
+    <h2 id="r1"></h2>
+    <h2 id="r2"></h2>
+  </div>
+</section>
+
+<section id="d4" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="term"></div>
+  <div class="row2" style="margin-bottom:14px"><button id="audioBtn" class="opt">Play signal</button></div>
+  <input id="code" inputmode="numeric" maxlength="4" placeholder="0000" autocomplete="off">
+  <div id="d4err" role="alert"></div>
+  <button id="sendBtn" class="gbtn">Send code</button>
+  <p id="tries" style="font-size:13px"></p>
+</section>
+
+<section id="d5" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t5">
+    <div id="t5head"><span id="t5info"></span><span id="t5clock" role="timer">--:--</span></div>
+    <div id="t5role" class="secret"></div>
+    <div id="t5log" aria-live="polite"></div>
+    <div id="t5vote"><div id="t5vtitle">Who do you expel?</div><div id="t5btns"></div></div>
+    <div id="t5form"><input id="t5in" maxlength="200" placeholder="Write a message" autocomplete="off" aria-label="Message"><button id="t5send" type="button">Send</button></div>
+    <div id="t5err" role="alert"></div>
+  </div>
+</section>
+
+<section id="d6i" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">Personal file</h2>
+    <p style="margin:0;font-size:15px;line-height:1.7">A solo game made only of text. There are no right answers.<br>You have <b id="t6min"></b> minutes from the moment you press Start, and the clock keeps running if you leave.</p>
+    <button id="t6go" class="gbtn">Start</button>
+  </div>
+</section>
+
+<section id="d6" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div id="t6clock" role="timer">--:--</div>
+  <div class="t6">
+    <div id="t6txt" aria-live="polite"></div>
+    <div id="t6opts"></div>
+    <input id="t6in" maxlength="40" placeholder="T9-..." autocomplete="off" spellcheck="false" autocapitalize="characters">
+    <button id="t6ok" type="button">Confirm</button>
+    <button id="t6next" type="button">Continue</button>
+    <div id="t6err" role="alert"></div>
+  </div>
+</section>
+
+<section id="d6w" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">Terminal 9 will decide<span class="dots"><i>.</i><i>.</i><i>.</i></span></h2>
+    <p style="margin:0;font-size:15px">Your file is closed. Come back later to see the result.</p>
+  </div>
+</section>
+<div id="t6w" class="secret" aria-live="polite"></div>
+
+<section id="d7l" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">The Dark Maze</h2>
+    <h2 id="d7lr" style="font-size:20px;margin:0"></h2>
+    <p id="d7lx" style="margin:0;font-size:15px;line-height:1.7"></p>
+    <p id="d7lc" style="margin:0;font-size:26px;font-variant-numeric:tabular-nums"></p>
+    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6">Move: arrow keys or WASD, or drag on the screen. Headphones recommended.</p>
+  </div>
+</section>
+
+<section id="d7ri" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 id="d7rt" style="font-size:22px;margin:0">The rope</h2>
+    <p id="d7rx" style="margin:0;font-size:15px;line-height:1.7"></p>
+    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6">Rope: left and right keys, or hold the left or right side of the screen.<br>You have <b id="d7rmin"></b> minutes from the moment you press Start, and the clock keeps running if you leave.</p>
+    <button id="d7rgo" class="gbtn">Start</button>
+  </div>
+</section>
+
+<section id="d7" class="screen">
+  <canvas id="d7cv" aria-label="Game"></canvas>
+  <div id="d7hud"><span id="d7a"></span><span id="d7b"></span><span id="d7c">--:--</span></div>
+  <div id="d7msg" aria-live="polite"></div>
+  <button id="d7catch" type="button" style="display:none">CATCH (Space)</button>
+  <button id="d8btn" type="button"></button>
+  <div id="d8wheel"><span>THE WHEEL</span><b id="d8wa"></b><b id="d8wb"></b></div>
+  <div id="d8res"></div>
+  <div id="d8feed"></div>
+  <div id="d7qte" style="display:none"><div id="d7qt"></div></div>
+  <div id="d7sp" style="display:none;position:absolute;bottom:12px;left:12px;z-index:4;gap:8px;align-items:center"><button id="d7prev" class="opt" style="padding:6px 12px;font-size:12px">&lt;</button><button id="d7next" class="opt" style="padding:6px 12px;font-size:12px">&gt;</button><select id="d7room" style="background:#000;color:#fff;border:1px solid #555;border-radius:6px;padding:5px"></select></div>
+  <button id="d7snd" type="button">Sound on</button>
+</section>
+
+<section id="d8w" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">The final</h2>
+    <p id="d8wx" style="margin:0;font-size:15px;line-height:1.7"></p>
+  </div>
+</section>
+
+<section id="d8i" class="screen" style="justify-content:flex-start;padding-top:78px">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t5" style="gap:12px">
+    <div style="text-align:center"><div style="font-size:12px;letter-spacing:3px;color:#9a9aa8">YOUR CODE IN THE ROOM</div><p id="d8code"></p></div>
+    <p id="d8st" style="margin:0;font-size:14px;line-height:1.7;text-align:center"></p>
+    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6;text-align:center">The chat closes when the lobby starts. In the room you will only be known by your code. Talk, agree, trust or doubt: nobody is a team except in your head.<br>The lobby starts in <b id="d8ic" style="color:#fff;font-variant-numeric:tabular-nums"></b></p>
+    <div id="d8log" aria-live="polite"></div>
+    <div id="t5form"><input id="d8in" maxlength="200" placeholder="Write a message" autocomplete="off" aria-label="Message"><button id="d8send" type="button">Send</button></div>
+    <div id="d8err" role="alert" style="font-size:12px;color:var(--red);min-height:14px"></div>
+  </div>
+</section>
+
+<section id="d8l" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 style="font-size:22px;margin:0">The Elimination Wheel</h2>
+    <p id="d8lcode" style="margin:0;font:800 56px 'Montserrat',sans-serif;color:var(--cyan)"></p>
+    <p id="d8lx" style="margin:0;font-size:15px;line-height:1.7"></p>
+    <p id="d8lc" style="margin:0;font-size:26px;font-variant-numeric:tabular-nums"></p>
+    <p style="margin:0;font-size:13px;color:#9a9aa8;line-height:1.6">Move: arrow keys or WASD, or drag on the screen. Duel and knife: the button at the top, or Space.</p>
+  </div>
+</section>
+
+<section id="d8e" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <div id="d8endlines" style="text-align:center"></div>
+  </div>
+</section>
+
+<section id="d7w" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="t6">
+    <h2 id="d7wt" style="font-size:22px;margin:0">Terminal 9 will decide</h2>
+    <p id="d7wp" style="margin:0;font-size:15px"></p>
+  </div>
+</section>
+
+<section id="d15" class="screen">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <div class="v15">
+    <h2>THE VOTE</h2>
+    <div class="v15row"><span>Active survivors</span><b id="v15s">[ 0 / 0 ]</b></div>
+    <div class="v15row"><span>Value per player</span><b>$1.00 USD</b></div>
+    <div class="v15row"><span>Current prize pool (95%)</span><b id="v15p">$0.00 USD</b></div>
+    <p id="v15t"></p>
+    <div id="v15pick" class="row2"><button id="v15c" class="gbtn">CONTINUE</button><button id="v15x" class="rbtn">CANCEL GAMES</button></div>
+    <div id="v15lockrow" class="row2" style="display:none;align-items:center"><span>Lock your vote: <b id="v15m"></b></span><button id="v15lock" class="gbtn">Lock</button><button id="v15back" class="opt">Back</button></div>
+    <p id="v15w" style="display:none;font-size:14px;margin:0">Your vote is locked<span class="dots"><i>.</i><i>.</i><i>.</i></span><br>The result is shown when the day closes. Come back later.</p>
+    <div id="v15err" role="alert"></div>
+  </div>
+</section>
+
+<div id="chat" class="chat">
+  <button id="chatTab" type="button" aria-expanded="false" aria-controls="chatPanel">Chat with your rival<span id="chatDot" aria-label="New messages"></span></button>
+  <div id="chatPanel">
+    <div id="chatLog" aria-live="polite"></div>
+    <div id="chatNote" role="alert"></div>
+    <div id="chatForm">
+      <input id="chatIn" maxlength="200" placeholder="Write a message" autocomplete="off" aria-label="Message">
+      <button id="chatSend" type="button">Send</button>
+    </div>
+  </div>
+</div>
+
+<div id="pass" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>PASSED</h1><p>Check Discord or the instructions for the next game</p>
+  <small>*Remember to login back tomorrow!</small>
+</div></div>
+
+<div id="elim" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>ELIMINATED</h1><p id="elimDay">You made it until DAY x</p>
+  <small>*You can not longer Login, Thank you for participating!</small>
+</div></div>
+
+<div id="blue" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>THE GAMES WILL CONTINUE</h1><p id="bluePct"></p><p>Day 2 is starting soon!</p>
+  <small>*Remember to log back in when it starts.</small>
+</div></div>
+
+<div id="ended" class="ov"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>THE GAMES HAVE ENDED</h1><p id="endPct"></p>
+  <p>If you wish to participate in future events, please stay tuned and do not leave the announcement group.</p>
+</div></div>
+
+<div id="ipw" class="ov" role="alertdialog" aria-label="Too many players on your network"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>WARNING</h1><p id="ipwMsg"></p>
+  <div class="row2" style="margin-top:22px"><button id="ipwOk" class="opt">OK</button></div>
+</div></div>
+
+<div id="settings" class="ov" role="dialog" aria-label="Settings"><div class="box">
+  <h1 style="font-size:28px;margin-bottom:22px">Settings</h1>
+  <div class="setrow"><span id="swl">Stream Enable</span><button id="sw" type="button" role="switch" aria-checked="false" aria-labelledby="swl"></button></div>
+  <p class="sethint">Hides your ID, your secret role, private codes and choices on the screen you share. Tap a blurred item to read it for 3 seconds. Anything you reveal is visible on stream while it shows, so for full privacy keep the game on a screen you are not sharing.</p>
+  <button id="setClose" class="opt">Close</button>
+</div></div>
+
+<button id="gear" type="button" aria-label="Settings"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+<div id="streamTag">STREAM MODE</div>
+
+<div id="fs" class="ov" role="dialog" aria-label="Fullscreen recommended"><div class="box">
+  <div class="brand"><img src="https://i.postimg.cc/bJhgw2zd/Gemini-Generated-Image-kl9ro8kl9ro8kl9r.jpg" alt=""> TERMINAL 9</div>
+  <h1>We recommend you to play in fullscreen</h1>
+  <div class="row2"><button id="fsGo" class="gbtn">Go fullscreen</button><button id="fsNo" class="opt">Not now</button></div>
+</div></div>
+
+<script src="/d7core.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let token, startLocal, raf, over = false, pick, pollT, mode = 'd2';
+
+async function call(action, extra = {}) {
+  const r = await fetch('/api/game', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, token, ...extra }) });
+  let d; try { d = await r.json(); } catch { d = {}; }
+  if (d.ipblock) { $('ipwMsg').textContent = d.error; $('ipw').classList.add('on'); }
+  if ((d.kicked || d.ipblock) && token) { token = null; route({ screen: 'none', msg: d.error }); }   // back to the login screen
+  if (!r.ok) throw d;
+  return d;
+}
+$('ipwOk').onclick = () => $('ipw').classList.remove('on');
+function show(id) { document.querySelectorAll('.screen').forEach(s => s.classList.remove('on')); $(id).classList.add('on'); $('gear').style.display = id === 'login' ? 'flex' : 'none'; }
+function d2view(id) { document.querySelectorAll('.d2v').forEach(v => v.classList.toggle('on', v.id === id)); }
+function eliminated(d) { $('elimDay').textContent = 'You made it until DAY ' + d; $('elim').classList.add('on'); }
+
+$('uid').addEventListener('keydown', async e => {
+  if (e.key !== 'Enter') return;
+  $('err').textContent = '';
+  try { const d = await call('login', { uid: e.target.value }); token = d.token; route(d.view); }
+  catch (x) { $('err').textContent = x.error || 'Connection error. Try again.'; }
+});
+
+function route(v) {
+  clearTimeout(pollT); clearInterval(t5T); stopD8();
+  if (v.screen !== 'day7') stopD7();
+  if (!String(v.screen).startsWith('day6')) setWhisper(null);
+  clearInterval(t6Clock); t6Run++;
+  chatSet(v.screen === 'pick' || v.screen === 'wait');
+  if (v.screen === 'eliminated') return eliminated(v.day);
+  if (v.screen === 'ended') return endedScreen(v.pct);
+  if (v.screen === 'pick15' || v.screen === 'wait15') return play15(v);
+  if (v.screen === 'passed') return $('pass').classList.add('on');
+  if (v.screen === 'reveal') return reveal(v);
+  if (v.screen === 'day1') {
+    show('game');
+    if (v.startAt) { $('ready').style.display = 'none'; runTimer(v.startAt, v.now); }
+    return;
+  }
+  if (v.screen === 'pick') { mode = 'd2'; show('d2'); return d2view('d2pick'); }
+  if (v.screen === 'pick3') { mode = 'd3'; show('d2'); return d2view('d3pick'); }
+  if (v.screen === 'wait' || v.screen === 'wait3') {
+    show('d2'); d2view(v.screen === 'wait3' ? 'd3wait' : 'd2wait');
+    pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { route(v); } }, v.screen === 'wait3' ? 10000 : 5000);
+    return;
+  }
+  if (v.screen === 'day4') {
+    show('d4');
+    $('tries').textContent = 'Attempts left: ' + v.left;
+    $('d4err').textContent = v.wrong ? 'Wrong code. The terminal rejects it.' : '';
+    $('code').value = '';
+    return typeClues(v.clues);
+  }
+  if (v.screen === 'day5') return playD5(v);
+  if (v.screen === 'day6intro') { show('d6i'); $('t6go').disabled = false; $('t6min').textContent = v.minutes; return; }
+  if (v.screen === 'day6') return playD6(v);
+  if (v.screen === 'day6wait') return waitD6(v);
+  if (v.screen === 'day7lobby') return lobbyD7(v);
+  if (v.screen === 'day7m') return playD7m(v);
+  if (v.screen === 'day7spec') return playD7s(v);
+  if (v.screen === 'day7ropeintro') return ropeIntroD7(v);
+  if (v.screen === 'day7') return playD7(v);
+  if (v.screen === 'day7wait') return waitD7(v);
+  if (v.screen === 'day8wait') return waitD8(v);
+  if (v.screen === 'day8intro') return introD8(v);
+  if (v.screen === 'day8lobby') return lobbyD8(v);
+  if (v.screen === 'day8play') return playD8(v);
+  if (v.screen === 'day8end') return endD8(v);
+  show('login'); $('err').textContent = v.msg || 'Game not available yet.';
+}
+
+// ---- Day 1 ----
+function left() { return Math.max(0, 60 - Math.max(0, Date.now() - startLocal) / 1000); }
+function runTimer(startAt, serverNow) { startLocal = startAt - (serverNow - Date.now()); over = false; loop(); }
+function loop() {
+  const l = left();
+  $('clock').textContent = l.toFixed(2).padStart(5, '0');
+  if (l <= 0) return press();
+  raf = requestAnimationFrame(loop);
+}
+$('go').onclick = async () => {
+  $('go').disabled = true;
+  try {
+    const d = await call('ready');
+    $('ready').style.display = 'none';
+    runTimer(d.view.startAt, d.now);
+    for (const w of ['Ready?', 'Start']) {   // 2 seconds total
+      $('cd').textContent = w; $('cd').classList.add('show');
+      await sleep(800); $('cd').classList.remove('show'); await sleep(200);
+    }
+  } catch (x) { $('go').disabled = false; }
+};
+$('btn').onclick = () => { if (startLocal && Date.now() >= startLocal && !over) press(); };
+async function press() {
+  if (over) return; over = true; cancelAnimationFrame(raf);
+  const el = Math.round(Date.now() - startLocal);   // elapsed ms on the player's clock at the moment of the click
+  try { route((await call('press', { el })).view); } catch { route({ screen: 'none', msg: 'Connection error. Log in again.' }); }
+}
+
+// ---- Day 4: Echoes of Terminal 9 ----
+let typed = false, noise;
+async function typeClues(lines) {
+  if (typed) return; typed = true;
+  $('term').textContent = '';
+  for (const l of ['> TERMINAL 9 // ECHO RECEIVER', '> signal found...', ''].concat(lines)) {
+    for (const ch of l + '\n') { $('term').textContent += ch; await sleep(18); }
+  }
+}
+$('audioBtn').onclick = () => {
+  if (noise) { noise.stop(); noise = null; $('audioBtn').textContent = 'Play signal'; return; }
+  const ac = window.__ac = window.__ac || new (window.AudioContext || window.webkitAudioContext)();
+  const buf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  noise = ac.createBufferSource(); noise.buffer = buf; noise.loop = true;
+  const g = ac.createGain(); g.gain.value = 0.08; noise.connect(g).connect(ac.destination); noise.start();
+  $('audioBtn').textContent = 'Stop signal';
+};
+$('code').oninput = e => { e.target.value = e.target.value.replace(/\D/g, ''); };
+$('sendBtn').onclick = async () => {
+  const c = $('code').value;
+  if (c.length !== 4) return $('d4err').textContent = 'Enter 4 digits.';
+  if (noise) $('audioBtn').click();
+  try { route((await call('code', { code: c })).view); } catch { $('d4err').textContent = 'Connection error. Try again.'; }
+};
+
+// ---- Streamer mode ----
+// Hides private information on screen (ID, secret role, private codes and choices). Tap a blurred item to read it for 3 s.
+let streamOn = false;
+try { streamOn = localStorage.getItem('t9_stream') === '1'; } catch {}
+function applyStream() {
+  document.body.classList.toggle('stream', streamOn);
+  $('sw').setAttribute('aria-checked', streamOn ? 'true' : 'false');
+  ['uid', 't6in', 'code'].forEach(id => { $(id).type = streamOn ? 'password' : 'text'; });
+  document.querySelectorAll('.secret').forEach(e => { e.tabIndex = streamOn ? 0 : -1; });
+}
+function revealSecret(el) { el.classList.add('show'); clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 3000); }
+document.addEventListener('click', e => { if (!streamOn) return; const el = e.target.closest('.secret'); if (el) revealSecret(el); });
+document.addEventListener('keydown', e => { if (!streamOn || (e.key !== 'Enter' && e.key !== ' ')) return; const el = e.target.closest && e.target.closest('.secret'); if (el) { e.preventDefault(); revealSecret(el); } });
+$('gear').onclick = () => { $('settings').classList.add('on'); $('sw').focus(); };
+$('setClose').onclick = () => $('settings').classList.remove('on');
+document.addEventListener('keydown', e => { if (e.key === 'Escape') $('settings').classList.remove('on'); });
+$('sw').onclick = () => { streamOn = !streamOn; try { localStorage.setItem('t9_stream', streamOn ? '1' : '0'); } catch {} applyStream(); };
+applyStream();
+
+// ---- Day 1.5: the vote ----
+let v15Pick = null;
+const money = n => '$' + Number(n).toFixed(2) + ' USD';
+function play15(v) {
+  show('d15'); $('v15err').textContent = '';
+  $('v15s').textContent = '[ ' + v.survivors + ' / ' + v.initial + ' ]';
+  $('v15p').textContent = money(v.pool);
+  $('v15t').textContent = 'If the tournament continues, the prize pool can reach up to ' + money(v.max) + ' (95%).';
+  const locked = v.screen === 'wait15';
+  $('v15pick').style.display = locked ? 'none' : 'flex'; $('v15lockrow').style.display = 'none'; $('v15w').style.display = locked ? 'block' : 'none';
+  if (locked) pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { play15(v); } }, 30000);
+}
+const pick15 = c => { v15Pick = c; $('v15m').textContent = c === 'continue' ? 'CONTINUE' : 'CANCEL GAMES'; $('v15pick').style.display = 'none'; $('v15lockrow').style.display = 'flex'; };
+$('v15c').onclick = () => pick15('continue'); $('v15x').onclick = () => pick15('cancel');
+$('v15back').onclick = () => { $('v15lockrow').style.display = 'none'; $('v15pick').style.display = 'flex'; };
+$('v15lock').onclick = async () => {
+  $('v15lock').disabled = true;
+  try { route((await call('vote15', { choice: v15Pick })).view); } catch (x) { $('v15err').textContent = (x && x.error) || 'Connection error. Try again.'; }
+  $('v15lock').disabled = false;
+};
+function endedScreen(pct) { $('endPct').textContent = pct != null ? pct + '% voted CANCEL GAMES' : ''; $('ended').classList.add('on'); }
+
+// ---- Day 5: The Traitor ----
+// Everything (roles, votes, results) is decided on the server. The browser only draws what it receives
+// and asks again every 3 seconds. Your own role is the only secret it ever gets.
+let t5T = 0, t5End = 0, t5Sig = '', t5VSig = '', t5State = '', t5Busy = false;
+const pad2 = n => String(n).padStart(2, '0');
+function t5Refresh() {
+  clearTimeout(pollT);
+  pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { t5Refresh(); } }, 3000);
+}
+function playD5(v) {
+  show('d5'); t5Refresh();
+  const lobby = v.state === 'lobby', voting = v.state === 'vote', chatOpen = v.state === 'discuss' || voting;
+  $('t5info').textContent = lobby ? 'LOBBY - THE GAME STARTS SOON' : v.state === 'over' ? 'COUNTING THE VOTES' : 'ROUND ' + v.round + ' / ' + v.rounds + ' - ' + (voting ? 'VOTE' : 'DISCUSSION');
+  const role = $('t5role');
+  role.className = 'secret ' + v.role;
+  role.textContent = v.role === 'traitor'
+    ? 'You are ' + v.me + ' and you are the TRAITOR. Blend in, mislead the group and do not get expelled.'
+    : 'You are ' + v.me + ' and you are CREW. One of the others is the traitor. Find them and vote them out.';
+  // clock
+  t5End = v.endsAt - (v.now - Date.now());
+  clearInterval(t5T);
+  const draw = () => { const t = Math.max(0, Math.ceil((t5End - Date.now()) / 1000)); $('t5clock').textContent = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); };
+  draw(); t5T = setInterval(draw, 250);
+  // chat log (rebuilt only when something changed, so scrolling and typing are never disturbed)
+  const log = $('t5log'), list = v.messages || [];
+  const sig = list.length + '|' + (list.length ? list[list.length - 1].text : '');
+  if (sig !== t5Sig) {
+    t5Sig = sig;
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.textContent = '';
+    if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = lobby ? 'The chat opens when the game starts.' : 'No messages yet. Say something.'; log.appendChild(e); }
+    for (const m of list) {
+      const row = document.createElement('div'); row.className = 'm' + (m.sys ? ' sys' : m.me ? ' me' : '');
+      if (!m.sys) { const who = document.createElement('span'); who.className = 'who'; who.textContent = m.me ? 'You' : m.who; row.appendChild(who); }
+      row.appendChild(document.createTextNode(m.text));   // text nodes only: no HTML injection
+      log.appendChild(row);
+    }
+    if (atEnd) log.scrollTop = log.scrollHeight;
+  }
+  // voting buttons
+  $('t5vote').classList.toggle('on', voting);
+  const vsig = v.state + '|' + v.round + '|' + v.myVote + '|' + v.players.map(p => p.alive ? 1 : 0).join('');
+  if (voting && vsig !== t5VSig) {
+    t5VSig = vsig;
+    const box = $('t5btns'); box.textContent = '';
+    const add = (label, target) => { const b = document.createElement('button'); b.textContent = label; if (v.myVote === target) b.className = 'sel'; b.onclick = () => t5Vote(target); box.appendChild(b); };
+    v.players.filter(p => p.alive && !p.me).forEach(p => add(p.label, p.idx));
+    add('Skip', -1);
+  }
+  if (!voting) t5VSig = '';
+  $('t5in').disabled = $('t5send').disabled = !chatOpen;
+  $('t5in').placeholder = chatOpen ? 'Write a message' : lobby ? 'Chat opens when the game starts' : 'Chat closed';
+  t5State = v.state;
+}
+async function t5Vote(target) {
+  try { route((await call('vote5', { target })).view); } catch (x) { $('t5err').textContent = (x && x.error) || 'Connection error. Try again.'; }
+}
+async function t5Say() {
+  const t = $('t5in').value.trim();
+  if (!t || t5Busy) return;
+  t5Busy = true; $('t5err').textContent = '';
+  try { $('t5in').value = ''; route((await call('say5', { text: t })).view); }
+  catch (x) { $('t5in').value = t; $('t5err').textContent = (x && x.error) || 'Connection error. Try again.'; }
+  t5Busy = false;
+}
+$('t5send').onclick = t5Say;
+$('t5in').addEventListener('keydown', e => { if (e.key === 'Enter') t5Say(); });
+
+// ---- Day 6: Sacrifices ----
+// A solo, text-only game. The server holds the script and every hidden value; the browser only shows the
+// current step and sends the answer back. The clock is kept by the server, so leaving the page does not pause it.
+let t6Run = 0, t6Clock = 0, t6Sel = null;
+function setWhisper(text) {
+  const w = $('t6w');
+  if (text && w.textContent !== text) { w.textContent = text; w.classList.add('on'); }
+  else if (!text) { w.classList.remove('on'); w.textContent = ''; }
+}
+$('t6go').onclick = async () => {
+  $('t6go').disabled = true;
+  try { route((await call('d6start')).view); } catch { $('t6go').disabled = false; }
+};
+async function playD6(v) {
+  const run = ++t6Run, st = v.step;
+  clearInterval(t6Clock); t6Sel = null;
+  show('d6'); setWhisper(v.whisper);
+  $('t6txt').classList.toggle('secret', !!st.secret); applyStream();
+  $('t6txt').textContent = ''; $('t6opts').textContent = ''; $('t6err').textContent = '';
+  $('t6next').style.display = $('t6ok').style.display = $('t6in').style.display = 'none';
+  const end = v.endsAt - (v.now - Date.now());
+  const draw = () => { const t = Math.max(0, Math.ceil((end - Date.now()) / 1000)); $('t6clock').textContent = pad2(Math.floor(t / 60)) + ':' + pad2(t % 60); };
+  draw(); t6Clock = setInterval(draw, 1000);
+  const ready = v.readyAt - (v.now - Date.now());
+  const lines = st.type === 'text' ? st.lines : [st.q];
+  for (const l of lines) {
+    for (const ch of l + '\n') { if (run !== t6Run) return; $('t6txt').textContent += ch; await sleep(ch === '\n' ? 320 : 15); }
+  }
+  while (Date.now() < ready) { if (run !== t6Run) return; await sleep(250); }
+  if (run !== t6Run) return;
+  const send = async (action, value, btns) => {
+    btns.forEach(b => b.disabled = true); $('t6err').textContent = '';
+    try { route((await call(action, { idx: st.idx, value })).view); }
+    catch (x) { $('t6err').textContent = (x && x.error) || 'Connection error. Try again.'; btns.forEach(b => b.disabled = false); }
+  };
+  if (st.type === 'text') {
+    const b = $('t6next'); b.style.display = 'block'; b.disabled = false; b.onclick = () => send('d6next', null, [b]);
+  } else if (st.type === 'choice') {
+    const box = $('t6opts');
+    st.opts.forEach(o => { const b = document.createElement('button'); b.textContent = o.label; b.onclick = () => send('d6ans', o.id, [...box.children]); box.appendChild(b); });
+  } else if (st.type === 'input') {
+    const i = $('t6in'), b = $('t6ok'); i.value = ''; i.style.display = 'block'; b.style.display = 'block'; b.disabled = false; i.focus();
+    const go = () => { if (i.value.trim()) send('d6ans', i.value.trim(), [b, i]); };
+    b.onclick = go; i.onkeydown = e => { if (e.key === 'Enter') go(); };
+  } else if (st.type === 'sacrifice') {
+    const box = $('t6opts'), b = $('t6ok'); b.textContent = 'Give it up'; b.disabled = true; b.style.display = 'block';
+    st.items.forEach(it => {
+      const x = document.createElement('button');
+      x.textContent = it.name; const d = document.createElement('span'); d.className = 'sacd'; d.textContent = it.desc; x.appendChild(d);
+      x.onclick = () => { t6Sel = it.id; [...box.children].forEach(c => c.classList.remove('sel')); x.classList.add('sel'); b.disabled = false; };
+      box.appendChild(x);
+    });
+    b.onclick = () => { if (t6Sel) send('d6ans', t6Sel, [b, ...box.children]); };
+  }
+}
+function waitD6(v) {
+  show('d6w'); setWhisper(v.whisper);
+  pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { waitD6(v); } }, 20000);
+}
+
+// ---- Day 2 chat ----
+const RIVAL = 'T9-???????';   // the rival's real ID is never sent to the browser
+let chatOn = false, chatOpen = false, chatT, chatSeen = 0, chatBusy = false, chatSig = '';
+function chatSet(on) {
+  if (on === chatOn) return;
+  chatOn = on; $('chat').classList.toggle('on', on);
+  if (on) chatPoll();
+  else { clearTimeout(chatT); chatOpen = false; $('chat').classList.remove('open'); $('chatTab').setAttribute('aria-expanded', 'false'); }
+}
+async function chatPoll() {
+  clearTimeout(chatT);
+  if (!chatOn) return;
+  if (!document.hidden) { try { chatRender(await call('chatGet')); } catch {} }
+  chatT = setTimeout(chatPoll, chatOpen ? 2500 : 6000);
+}
+function chatRender(d) {
+  const log = $('chatLog'), list = d.messages || [];
+  $('chatIn').disabled = $('chatSend').disabled = !d.open;
+  if (!d.open) $('chatNote').textContent = 'Chat is closed.';
+  const sig = list.length + '|' + (list.length ? list[list.length - 1].text : '');
+  if (sig !== chatSig) {
+    chatSig = sig;
+    const atEnd = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+    log.textContent = '';
+    if (!list.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'No messages yet. Say hi to your rival.'; log.appendChild(e); }
+    for (const m of list) {
+      const row = document.createElement('div'); row.className = 'm' + (m.me ? ' me' : '');
+      const who = document.createElement('span'); who.className = 'who'; who.textContent = m.me ? 'You' : RIVAL;
+      row.appendChild(who); row.appendChild(document.createTextNode(m.text));   // textContent only: no HTML injection
+      log.appendChild(row);
+    }
+    if (atEnd || chatOpen) log.scrollTop = log.scrollHeight;
+  }
+  if (chatOpen) chatSeen = list.length;
+  $('chatDot').classList.toggle('on', !chatOpen && list.length > chatSeen);
+}
+$('chatTab').onclick = () => {
+  chatOpen = !chatOpen;
+  $('chat').classList.toggle('open', chatOpen); $('chatTab').setAttribute('aria-expanded', chatOpen);
+  if (chatOpen) { $('chatDot').classList.remove('on'); $('chatLog').scrollTop = $('chatLog').scrollHeight; $('chatIn').focus(); chatPoll(); }
+};
+async function chatSend() {
+  const t = $('chatIn').value.trim();
+  if (!t || chatBusy) return;
+  chatBusy = true; $('chatNote').textContent = '';
+  try { $('chatIn').value = ''; chatRender(await call('chatSend', { text: t })); }
+  catch (x) { $('chatIn').value = t; $('chatNote').textContent = (x && x.error) || 'Connection error. Try again.'; }
+  chatBusy = false;
+}
+$('chatSend').onclick = chatSend;
+$('chatIn').addEventListener('keydown', e => { if (e.key === 'Enter') chatSend(); });
+
+// ---- Day 2 ----
+document.querySelectorAll('.opt[data-c]').forEach(b => b.onclick = () => { pick = b.dataset.c; $('mine').textContent = pick.toUpperCase(); d2view('d2lock'); });
+$('backBtn').onclick = () => d2view(mode === 'd3' ? 'd3pick' : 'd2pick');
+$('slider').oninput = () => { $('sv').textContent = $('slider').value; };
+$('selBtn').onclick = () => { pick = Number($('slider').value); $('mine').textContent = pick; d2view('d2lock'); };
+$('lockBtn').onclick = async () => { d2view('d2wait'); try { route((await call('pick', { choice: pick })).view); } catch { d2view(mode === 'd3' ? 'd3pick' : 'd2pick'); } };
+async function reveal(v) {
+  show('d2'); d2view('d2rev');
+  if (v.day === 1.5) {
+    try { await call('ack'); } catch {}
+    if (v.result === 'cancel') return endedScreen(v.pct);
+    $('bluePct').textContent = v.pct + '% voted CONTINUE'; $('blue').classList.add('on');
+    return;
+  }
+  if (v.day === 6) {
+    $('r1').textContent = v.kept ? 'You kept: ' + v.kept : 'Your file is closed';
+    $('r2').textContent = '';
+    await sleep(2500);
+    $('r2').textContent = v.ok ? 'Terminal 9 has no more questions. For now.' : 'Terminal 9 has seen enough.';
+    await sleep(3500);
+    try { await call('ack'); } catch {}
+    if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+    return;
+  }
+  if (v.day === 7) {
+    if (v.phase === 'maze') {
+      $('r1').textContent = v.role === 'hunter' ? 'The hunt is over' : 'You did not make it out';
+      $('r2').textContent = '';
+      await sleep(2500);
+      $('r2').textContent = v.role === 'hunter' ? (v.mode === 'hi' ? 'The survivors got away.' : v.mode === 'lo' ? 'You did not catch enough.' : 'You did not find the exit.') : 'You were still in the maze when time ran out.';
+    } else {
+      $('r1').textContent = v.finished ? 'You made it out' : 'The hour is over';
+      $('r2').textContent = '';
+      await sleep(2500);
+      $('r2').textContent = v.ok ? 'You were fast enough. This time.' : 'Others were faster.';
+    }
+    await sleep(3500);
+    try { await call('ack'); } catch {}
+    if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+    return;
+  }
+  if (v.day === 5) {
+    $('r1').textContent = v.expelled ? 'The group expelled you' : 'The traitor was ' + v.traitor;
+    $('r2').textContent = '';
+    await sleep(2500);
+    $('r2').textContent = v.expelled ? 'You were not the traitor.' : v.role === 'traitor' ? (v.ok ? 'You fooled everyone.' : 'They found you.') : (v.ok ? 'You found the traitor.' : 'The traitor fooled you.');
+    await sleep(3500);
+    try { await call('ack'); } catch {}
+    if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+    return;
+  }
+  $('r1').textContent = 'You chose ' + String(v.mine).toUpperCase(); $('r2').textContent = '';
+  await sleep(2000);
+  if (v.day === 3) {
+    $('r2').innerHTML = 'The target (average x 0.8) is<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
+    await sleep(3000);
+    $('r2').textContent = 'The target (average x 0.8) is ' + v.target;
+  } else if (v.theirs == null) {
+    $('r2').textContent = 'Your rival did not choose in time';
+  } else {
+    $('r2').innerHTML = 'Your rival chose<span class="dots"><i>.</i><i>.</i><i>.</i></span>';
+    await sleep(3000);
+    $('r2').textContent = 'Your rival chose ' + v.theirs.toUpperCase();
+  }
+  await sleep(2500);
+  try { await call('ack'); } catch {}
+  if (v.ok) $('pass').classList.add('on'); else eliminated(v.day);
+}
+
+
+// ---- Day 7: The Dark Maze (hunters against survivors) + The Tightrope ----
+// The server is the referee: it owns the clock, the rooms, the kills and the escapes. This code only draws,
+// moves you, and tells the server where you are. You never see anyone's ID, only a role.
+let g7 = null, ac7 = null;
+function lobbyD7(v) {
+  show('d7l');
+  const t = () => { if (!v.startsAt) return 'The maze has not been opened yet. Stay on this page.'; const s = Math.max(0, Math.ceil((v.startsAt - (Date.now() + (v.now - v.t0))) / 1000)); return 'The maze opens in ' + Math.floor(s / 60) + ':' + pad2(s % 60); };
+  v.t0 = Date.now();
+  $('d7lr').textContent = v.role === 'hunter' ? 'You are a HUNTER' : v.role === 'survivor' ? 'You are a SURVIVOR' : v.role === 'spec' ? 'You will watch this round' : '';
+  $('d7lr').style.color = v.role === 'hunter' ? '#ff0055' : v.role === 'survivor' ? '#00f3ff' : '#aaa';
+  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark. When you are close, a CATCH button appears: press it and you both freeze for 5 quick buttons. Hit more buttons than the survivor (a tie goes to them) and they go back to the start and you are moved somewhere else. You cannot enter the start or the exit area, or wait near them. With enough catches the exit opens for you too.'
+    : v.role === 'survivor' ? 'Find the exit before time runs out. When a hunter gets close and presses CATCH, you both freeze and 5 buttons appear: press them all in time (keyboard letters or taps) and you keep running. If the hunter hits more buttons than you (a tie is yours), you do not die, but you go back to the start. Survivors still inside when the time ends are eliminated.'
+    : v.role === 'spec' ? 'There is an odd number of players, so you will not play in the maze. You can watch every room (roles only). You go on to the rope when the maze ends.' : 'Two teams will be chosen at random. Hunters against survivors. Headphones recommended.';
+  const tick = () => { $('d7lc').textContent = t(); };
+  tick(); const iv = setInterval(tick, 500);
+  const next = async () => { try { const d = await call('view'); clearInterval(iv); if (d.view.screen !== 'day7lobby' || d.view.role !== v.role) return route(d.view); v.startsAt = d.view.startsAt; v.now = d.view.now; v.t0 = Date.now(); } catch {} pollT = setTimeout(next, 3000); };
+  pollT = setTimeout(next, 3000);
+  g7 = { stopped: false, raf: 0, ping: iv, kd() {}, ku() {}, rs() {} };
+}
+function ropeIntroD7(v) {
+  show('d7ri'); $('d7rmin').textContent = v.minutes;
+  $('d7rt').textContent = v.role === 'survivor' ? 'You made it out' : v.role === 'hunter' ? 'The hunt is over' : v.role === 'spec' ? 'The maze is over' : 'The rope';
+  $('d7rx').textContent = v.wait ? 'The maze is still open for the others. You can start the rope now, and your time counts only from when you press Start.' : 'Now cross the rope in the wind. The faster and calmer you are, the better your chances.';
+  $('d7rgo').disabled = false;
+}
+$('d7rgo').onclick = async () => { $('d7rgo').disabled = true; try { if (!ac7) ac7 = makeAudio(); route((await call('d7rope')).view); } catch { $('d7rgo').disabled = false; } };
+
+function makeAudio() {
+  try {
+    const A = new (window.AudioContext || window.webkitAudioContext)(), master = A.createGain(); master.gain.value = 0.8; master.connect(A.destination);
+    const drone = A.createOscillator(), dg = A.createGain(); drone.type = 'sine'; drone.frequency.value = 46; dg.gain.value = 0.05; drone.connect(dg); dg.connect(master); drone.start();
+    const buf = A.createBuffer(1, A.sampleRate * 2, A.sampleRate), ch = buf.getChannelData(0); for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+    const src = A.createBufferSource(); src.buffer = buf; src.loop = true;
+    const bp = A.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 500; const wg = A.createGain(); wg.gain.value = 0;
+    src.connect(bp); bp.connect(wg); wg.connect(master); src.start();
+    return { A, master, wind: wg, thump(vol) {
+      const o = A.createOscillator(), g = A.createGain(), t = A.currentTime; o.type = 'sine'; o.frequency.setValueAtTime(70, t); o.frequency.exponentialRampToValueAtTime(40, t + 0.15);
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.25);
+    } };
+  } catch { return null; }
+}
+function say7(t, ms) { const m = $('d7msg'); m.textContent = t; m.classList.add('on'); clearTimeout(m._t); m._t = setTimeout(() => m.classList.remove('on'), ms || 2600); }
+function stopD7() { $('d7qte').style.display = 'none'; $('d7catch').style.display = 'none'; if (g7) { window.removeEventListener('keydown', g7.qkd, true); window.removeEventListener('keydown', g7.ckd); cancelAnimationFrame(g7.raf); clearInterval(g7.ping); clearInterval(g7.sync); window.removeEventListener('keydown', g7.kd); window.removeEventListener('keyup', g7.ku); window.removeEventListener('resize', g7.rs); g7.stopped = true; g7 = null; } if (ac7 && ac7.wind) ac7.wind.gain.value = 0; $('d7sp').style.display = 'none'; }
+
+// Shared canvas, keyboard and touch setup for the maze, the spectator view and the rope
+function setupD7(v, extra) {
+  stopD7(); show('d7'); clearTimeout(pollT);
+  const cv = $('d7cv'), cx = cv.getContext('2d'), dk = document.createElement('canvas'), dx = dk.getContext('2d');
+  const G = g7 = Object.assign({ v, keys: {}, joy: null, stopped: false, offset: v.now - Date.now(), busy: false, last: performance.now(), t: 0, fade: 0, cv, cx, dk, dx }, extra || {});
+  G.rs = () => { const r = window.devicePixelRatio || 1; cv.width = dk.width = Math.floor(innerWidth * r); cv.height = dk.height = Math.floor(innerHeight * r); G.r = r; }; G.rs(); window.addEventListener('resize', G.rs);
+  G.kd = e => { const k = e.key.toLowerCase(); if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'w', 'a', 's', 'd'].includes(k)) { G.keys[k] = true; e.preventDefault(); } };
+  G.ku = e => { G.keys[e.key.toLowerCase()] = false; };
+  window.addEventListener('keydown', G.kd); window.addEventListener('keyup', G.ku);
+  cv.onpointerdown = e => { G.joy = { ox: e.clientX, oy: e.clientY, x: e.clientX, y: e.clientY }; try { cv.setPointerCapture(e.pointerId); } catch {} };
+  cv.onpointermove = e => { if (G.joy) { G.joy.x = e.clientX; G.joy.y = e.clientY; } };
+  cv.onpointerup = cv.onpointercancel = () => { G.joy = null; };
+  $('d7snd').onclick = () => { if (!ac7) ac7 = makeAudio(); if (ac7) { const off = ac7.master.gain.value > 0; ac7.master.gain.value = off ? 0 : 0.8; $('d7snd').textContent = off ? 'Sound off' : 'Sound on'; } };
+  return G;
+}
+const clock7 = G => { const left = G.v.endsAt - (Date.now() + G.offset); $('d7c').textContent = Math.max(0, Math.floor(left / 60000)) + ':' + pad2(Math.max(0, Math.floor(left / 1000) % 60)); return left; };
+function inputVec(G) {
+  let x = (G.keys.arrowright || G.keys.d ? 1 : 0) - (G.keys.arrowleft || G.keys.a ? 1 : 0), y = (G.keys.arrowdown || G.keys.s ? 1 : 0) - (G.keys.arrowup || G.keys.w ? 1 : 0);
+  if (G.joy) { const dx = G.joy.x - G.joy.ox, dy = G.joy.y - G.joy.oy, l = Math.hypot(dx, dy); if (l > 8) { x = dx / Math.max(l, 50); y = dy / Math.max(l, 50); } }
+  return [x, y];
+}
+const goView = async G => { if (G.busy) return; G.busy = true; try { route((await call('view')).view); } catch { G.busy = false; } };
+
+function playD7(v) {   // the rope
+  const G = setupD7(v, { falls: v.falls, escaped: v.escaped });
+  $('d7a').textContent = 'ROPE ' + (v.seg + 1) + ' / ' + v.segs;
+  const sendPing = async () => { if (G.stopped) return; try { const d = await call('d7ping', { frac: G.frac || 0, falls: G.falls }); if (d.view && d.view.escaped != null) G.escaped = d.view.escaped; } catch {} };
+  G.ping = setInterval(sendPing, 10000);
+  initRope(G, v);
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const left = clock7(G); $('d7b').textContent = G.escaped + ' finished';
+    if (left <= -1500) return goView(G);
+    stepRope(G, dt, G.cx, G.cv);
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
+}
+
+// ===== Day 8: The Elimination Wheel (the final) =====
+let d8T = 0, d8C = 0;
+function stopD8() { clearInterval(d8T); clearTimeout(d8C); d8T = 0; d8C = 0; $('d8btn').style.display = 'none'; $('d8wheel').style.display = 'none'; $('d8res').classList.remove('on'); $('d8feed').textContent = ''; if (window.d8kd) { window.removeEventListener('keydown', window.d8kd); window.d8kd = null; } }
+function waitD8(v) {
+  show('d8w');
+  $('d8wx').textContent = v.started ? 'The final started without you.' : 'The final has not been opened yet. Stay on this page.';
+  pollT = setTimeout(async () => { try { route((await call('view')).view); } catch { route(v); } }, 5000);
+}
+const statLines8 = st => {
+  const gone = Object.values(st.byDay || {}).reduce((a, b) => a + b, 0), days = Object.keys(st.byDay || {}).sort((a, b) => a - b);
+  return { text: st.total + ' players entered Terminal 9. ' + gone + ' are gone. ' + st.finalists + ' reached this room.', days: days.map(d => 'Day ' + d + ': ' + st.byDay[d] + ' fell') };
+};
+function introD8(v) {
+  show('d8i'); $('d8code').textContent = 'P' + v.code;
+  const L = statLines8(v.stats); $('d8st').innerHTML = ''; $('d8st').append(L.text, document.createElement('br'), L.days.join('  -  '));
+  const off = v.now - Date.now(), tick = () => { const s = Math.max(0, Math.ceil((v.endsAt - (Date.now() + off)) / 1000)); $('d8ic').textContent = Math.floor(s / 60) + ':' + pad2(s % 60); if (s <= 0) { clearInterval(d8T); call('view').then(d => route(d.view)).catch(() => {}); } };
+  tick(); d8T = setInterval(tick, 500);
+  const render = ms => { const log = $('d8log'), stick = log.scrollTop + log.clientHeight >= log.scrollHeight - 30; log.textContent = ''; if (!ms.length) { const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'Nobody has spoken yet.'; log.append(e); } ms.forEach(m => { const d = document.createElement('div'); d.className = 'm' + (m.me ? ' me' : ''); const w = document.createElement('span'); w.className = 'who'; w.textContent = m.who + ':'; d.append(w, m.text); log.append(d); }); if (stick) log.scrollTop = log.scrollHeight; };
+  const load = async () => { try { const d = await call('d8chatGet'); if (!d.open) return route((await call('view')).view); render(d.messages); } catch {} d8C = setTimeout(load, 2500); };
+  load();
+  const send = async () => { const t = $('d8in').value.trim(); if (!t) return; $('d8err').textContent = ''; try { $('d8in').value = ''; const d = await call('d8chatSend', { text: t }); if (d.open) render(d.messages); } catch (x) { $('d8in').value = t; $('d8err').textContent = (x && x.error) || 'Connection error.'; } };
+  $('d8send').onclick = send; $('d8in').onkeydown = e => { if (e.key === 'Enter') send(); };
+}
+function lobbyD8(v) {
+  show('d8l'); $('d8lcode').textContent = 'P' + v.code;
+  $('d8lx').textContent = v.count + ' players are in the room. Two are called by the wheel. Anybody can end up with the knife. The last one standing wins. There are no teams here, only what you decide.';
+  const off = v.now - Date.now(), tick = () => { const s = Math.max(0, Math.ceil((v.startsAt - (Date.now() + off)) / 1000)); $('d8lc').textContent = 'The room opens in ' + Math.floor(s / 60) + ':' + pad2(s % 60); if (s <= 0) { clearInterval(d8T); call('view').then(d => route(d.view)).catch(() => {}); } };
+  tick(); d8T = setInterval(tick, 500);
+}
+async function endD8(v) {
+  show('d8e'); const box = $('d8endlines'); box.textContent = '';
+  const L = statLines8(v.stats), lines = [L.text, ...L.days, 'Only one player is left standing.'];
+  const add = (t, big) => new Promise(r => { const p = document.createElement('p'); if (big) { p.style.cssText = 'font:800 clamp(54px,16vw,100px) Montserrat,sans-serif;color:var(--cyan);text-shadow:0 0 24px rgba(0,243,255,.6);line-height:1.1'; } p.textContent = t; box.append(p); setTimeout(() => p.classList.add('on'), 60); setTimeout(r, big ? 3200 : 1900); });
+  const myRun = ++t6Run;
+  for (const t of lines) { await add(t); if (myRun !== t6Run) return; }
+  await add(v.winner ? 'P' + v.winner : 'Nobody', true); if (myRun !== t6Run) return;
+  await add(v.won ? 'That is you.' : 'P' + v.you + ', you were not the last one.');
+  if (v.prize) await add((v.won ? 'Your prize: ' : 'The prize: ') + v.prize);
+}
+
+function playD8(v) {
+  const n = v.room.n, grid = Uint8Array.from(v.room.grid, c => +c), T = v.room.table;
+  const G = setupD7(v, { n, g: grid, others: new Map(), inflight: false, knife: null, duel: null, seen: new Set(), alive: 0, total: 0, dead: false, frozen: false, shotFor: null, pos: null, ends: 0 });
+  window.removeEventListener('keydown', G.ckd);
+  $('d7c').textContent = ''; $('d7a').textContent = 'P' + v.code;
+  const srv = () => Date.now() + G.offset;
+  const doSync = async () => {
+    if (G.stopped || G.inflight || G.busy) return; G.inflight = true;
+    try {
+      const t0 = Date.now(), d = await call('d8sync', G.pos ? { x: G.pos.x, y: G.pos.y } : {}), t1 = Date.now(), s = d.sync; if (G.stopped) return;
+      if (!s) return route(d.view);
+      if (d.now) G.offset = d.now - (t0 + t1) / 2;
+      if (s.ended) return goView(G);
+      if (s.wait) return;
+      G.dead = !!s.me.dead; G.frozen = !!s.frozen; G.duel = s.duel; G.knife = s.knife; G.alive = s.alive; G.total = s.total;
+      if (!G.dead && (!G.pos || s.fix && !s.frozen || Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5)) G.pos = { x: s.me.x, y: s.me.y };
+      if (s.frozen && G.pos) G.pos = { x: s.me.x, y: s.me.y };
+      if (G.dead && !G.pos) G.pos = { x: s.me.x, y: s.me.y };
+      const seen = new Set();
+      for (const o of s.players) { seen.add(o.c); const c = G.others.get(o.c); if (c) { c.tx = o.x; c.ty = o.y; c.t = Date.now(); } else G.others.set(o.c, { x: o.x, y: o.y, tx: o.x, ty: o.y, t: Date.now() }); }
+      for (const [k, c] of G.others) if (!seen.has(k) && Date.now() - c.t > 900) G.others.delete(k);
+      for (const f of s.feed) if (!G.seen.has(f.id)) { G.seen.add(f.id); if (G.seen.size > 1 || f.id > 0) { const e = document.createElement('div'); e.textContent = f.t; $('d8feed').append(e); setTimeout(() => e.remove(), 7000); if (ac7) ac7.thump(0.35); } }
+      if (s.over && !G.ends) { G.ends = 1; setTimeout(() => goView(G), 3200); }
+    } catch (x) { if (x && x.error && !x.kicked) say7(x.error, 1500); }
+    finally { G.inflight = false; }
+  };
+  G.sync = setInterval(doSync, 250); doSync();
+  const nearTarget = () => { let best = null, bd = 1.9; for (const [k, c] of G.others) { const dd = Math.hypot(c.x - G.pos.x, c.y - G.pos.y); if (dd < bd) { bd = dd; best = k; } } return best; };
+  const act = async () => {
+    const d = G.duel, sn = srv();
+    if (d && !d.res && d.slot && sn >= d.spinEnd && G.shotFor !== d.greenAt && !d.shot) {
+      G.shotFor = d.greenAt;
+      const body = sn < d.greenAt ? { early: true } : { ms: Math.round(sn - d.greenAt) };
+      try { await call('d8shot', body); } catch {}
+      if (body.early) say7('Too early.', 2500);
+      doSync(); return;
+    }
+    if (!d && G.knife && G.knife.mine && !G.dead && G.pos) { const t = nearTarget(); if (t != null) { try { const r = await call('d8stab', { target: t }); if (r.sync && r.sync.ok) say7('P' + t + ' is out.', 2500); } catch {} doSync(); } }
+  };
+  $('d8btn').onclick = act;
+  window.d8kd = e => { if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) act(); } };
+  window.addEventListener('keydown', window.d8kd);
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const [ix, iy] = inputVec(G), sn = srv(), d = G.duel;
+    if (G.pos && !G.frozen && !G.dead && !(d && d.slot)) { D7.move(grid, n, G.pos, ix, iy, dt); }
+    for (const c of G.others.values()) { c.x += (c.tx - c.x) * Math.min(1, dt * 9); c.y += (c.ty - c.y) * Math.min(1, dt * 9); }
+    $('d7b').textContent = G.alive + ' / ' + G.total + ' left' + (G.dead ? ' - YOU ARE OUT' : '');
+    // the top button: the duel (for the two players, and as a signal for everybody) or the knife
+    const btn = $('d8btn'), wheel = $('d8wheel'), res = $('d8res');
+    wheel.style.display = 'none';
+    if (d && !d.res && sn < d.spinEnd) {   // the wheel spins: codes slow down and stop on the two players
+      wheel.style.display = 'flex'; btn.style.display = 'none';
+      const t = Math.min(1, Math.max(0, (sn - (d.spinEnd - 5500)) / 5500)), codes = [d.a, d.b, ...G.others.keys()].filter((x, i, a) => a.indexOf(x) === i), k = Math.floor((1 - Math.pow(1 - t, 3)) * 14);
+      const fin = t > 0.88; $('d8wa').textContent = 'P' + (fin ? d.a : codes[(k * 2) % codes.length]); $('d8wb').textContent = 'P' + (fin ? d.b : codes[(k * 2 + 1) % codes.length]);
+    } else if (d && !d.res) {
+      btn.style.display = 'block'; const green = sn >= d.greenAt;
+      if (d.slot) { btn.className = green && !d.shot && G.shotFor !== d.greenAt ? 'green' : d.shot || G.shotFor === d.greenAt ? 'idle' : ''; btn.textContent = d.shot || G.shotFor === d.greenAt ? 'Waiting...' : green ? 'SHOOT!  (Space)' : 'WAIT...'; if (green && !G.gsnd) { G.gsnd = 1; if (ac7) ac7.thump(0.7); } if (!green) G.gsnd = 0; }
+      else { btn.className = green ? 'green idle' : 'idle'; btn.textContent = 'P' + d.a + '  vs  P' + d.b; }
+    } else if (d && d.res) {
+      btn.style.display = 'none';
+    } else if (G.knife && G.knife.mine && !G.dead && G.pos) {
+      const t = nearTarget(), left = Math.max(0, Math.ceil((G.knife.until - sn) / 1000));
+      btn.style.display = 'block'; btn.className = 'stab'; btn.textContent = t != null ? 'STAB P' + t + '  (Space)  ' + left + 's' : 'You have the knife: ' + left + 's';
+    } else btn.style.display = 'none';
+    if (d && d.res && sn < d.res.until) { res.textContent = d.res.lose ? 'P' + d.res.lose + " Couldn't make it longer" : 'Nobody fired. Both survive.'; res.classList.add('on'); } else res.classList.remove('on');
+    drawRoom(G, T, sn);
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
+}
+// Draws the whole room. During a duel the room dims and soft stage lights follow the two players;
+// they fade in (no flashing), turn green with the button and then show the result for a few seconds.
+function drawRoom(G, T, sn) {
+  const { cx, cv, dk, dx, n, g } = G, W = cv.width, H = cv.height, r = G.r, top = 92 * r;
+  const S = Math.min(W / n, (H - top) / n) * 0.97, ox = (W - n * S) / 2, oy = top + (H - top - n * S) / 2;
+  cx.fillStyle = '#0a090d'; cx.fillRect(0, 0, W, H);
+  cx.fillStyle = '#1f1b25'; cx.fillRect(ox, oy, n * S, n * S);
+  for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (g[y * n + x] === 1 && !(x >= T.x0 && x <= T.x1 && y >= T.y0 && y <= T.y1)) { cx.fillStyle = '#403a4c'; cx.fillRect(ox + x * S, oy + y * S, S + 1, S + 1); }
+  // the long table with the food
+  cx.fillStyle = '#5b3d27'; cx.fillRect(ox + T.x0 * S, oy + T.y0 * S, (T.x1 - T.x0 + 1) * S, (T.y1 - T.y0 + 1) * S);
+  cx.fillStyle = '#7a5434'; cx.fillRect(ox + T.x0 * S + 3, oy + T.y0 * S + 3, (T.x1 - T.x0 + 1) * S - 6, (T.y1 - T.y0 + 1) * S - 6);
+  const FOOD = ['#d9523b', '#e8b53a', '#7cc35a', '#c9c9d2', '#b86fd1', '#e88f4a'];
+  for (let y = T.y0; y <= T.y1; y++) for (let x = T.x0; x <= T.x1; x++) { const h = (x * 73 + y * 151) % 97; if (h % 3) continue; cx.fillStyle = FOOD[h % FOOD.length]; cx.beginPath(); cx.arc(ox + (x + 0.3 + (h % 5) / 10) * S, oy + (y + 0.35 + (h % 4) / 8) * S, S * (0.16 + (h % 3) / 30), 0, 6.3); cx.fill(); }
+  const X = u => ox + u * S, Y = u => oy + u * S;
+  // the knife on the floor
+  const kn = G.knife;
+  if (kn && !kn.h) { const p = 0.6 + 0.4 * Math.sin(G.t * 2.2); cx.save(); cx.translate(X(kn.x), Y(kn.y)); cx.rotate(0.7); cx.fillStyle = 'rgba(230,235,245,' + p + ')'; cx.fillRect(-S * 0.08, -S * 0.42, S * 0.16, S * 0.6); cx.fillStyle = '#7a4a2a'; cx.fillRect(-S * 0.1, S * 0.16, S * 0.2, S * 0.26); cx.restore(); cx.strokeStyle = 'rgba(255,255,255,' + p * 0.5 + ')'; cx.lineWidth = 2; cx.beginPath(); cx.arc(X(kn.x), Y(kn.y), S * 0.7, 0, 6.3); cx.stroke(); }
+  // players
+  const people = [...[...G.others].map(([c, o]) => ({ c, x: o.x, y: o.y, me: false }))];
+  if (G.pos && (!G.dead || (G.duel && G.duel.res && G.duel.res.lose === G.v.code && sn < G.duel.res.until))) people.push({ c: G.v.code, x: G.pos.x, y: G.pos.y, me: true });
+  cx.textAlign = 'center'; cx.font = '700 ' + Math.max(11, S * 0.42) + 'px Montserrat,sans-serif';
+  for (const p of people) {
+    cx.fillStyle = p.me ? '#00f3ff' : '#d4d4de'; cx.beginPath(); cx.arc(X(p.x), Y(p.y), S * 0.36, 0, 6.3); cx.fill();
+    cx.fillStyle = '#fff'; cx.fillText('P' + p.c, X(p.x), Y(p.y) - S * 0.55);
+    if (kn && kn.h === p.c) { const left = Math.max(0, (kn.until - sn) / 1000), pr = 0.6 + 0.4 * Math.sin(G.t * 3); cx.strokeStyle = 'rgba(255,77,90,' + pr + ')'; cx.lineWidth = 3; cx.beginPath(); cx.arc(X(p.x), Y(p.y), S * 0.62, 0, 6.3); cx.stroke(); cx.fillStyle = '#ff4d5a'; cx.fillText('KNIFE ' + Math.ceil(left), X(p.x), Y(p.y) + S * 1.05); }
+  }
+  // stage lights for the duel
+  const d = G.duel; if (!d) return;
+  const resUntil = d.res ? d.res.until : 0, appear = Math.min(1, Math.max(0, (sn - d.spinEnd) / 1500)), vanish = d.res ? Math.min(1, Math.max(0, (resUntil - sn) / 700)) : 1, k = Math.min(appear, vanish);
+  if (k <= 0) return;
+  const spot = {}, find = c => people.find(p => p.c === c);
+  const green = [57, 255, 20], red = [255, 40, 60], warm = [255, 244, 214];
+  const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+  const gT = Math.min(1, Math.max(0, (sn - d.greenAt) / 450));
+  for (const c of [d.a, d.b]) {
+    const p = find(c); if (!p) continue;
+    let col = mix(warm, green, gT);
+    if (d.res) col = c === d.res.lose ? red : c === d.res.win ? green : mix(warm, green, 1);
+    spot[c] = { x: X(p.x), y: Y(p.y), col };
+  }
+  dx.clearRect(0, 0, W, H); dx.fillStyle = 'rgba(0,0,0,0.7)'; dx.fillRect(0, 0, W, H); dx.globalCompositeOperation = 'destination-out';
+  for (const s of Object.values(spot)) { const gr = dx.createRadialGradient(s.x, s.y, 0, s.x, s.y, S * 3.4); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(0.55, 'rgba(0,0,0,0.85)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = gr; dx.beginPath(); dx.arc(s.x, s.y, S * 3.4, 0, 6.3); dx.fill(); }
+  dx.globalCompositeOperation = 'source-over';
+  cx.globalAlpha = k; cx.drawImage(dk, 0, 0); cx.globalAlpha = 1;
+  cx.globalCompositeOperation = 'lighter';
+  for (const s of Object.values(spot)) { const gr = cx.createRadialGradient(s.x, s.y, 0, s.x, s.y, S * 3.1); gr.addColorStop(0, 'rgba(' + s.col.join(',') + ',' + (0.42 * k) + ')'); gr.addColorStop(1, 'rgba(' + s.col.join(',') + ',0)'); cx.fillStyle = gr; cx.beginPath(); cx.arc(s.x, s.y, S * 3.1, 0, 6.3); cx.fill(); }
+  cx.globalCompositeOperation = 'source-over';
+  // the players again, on top of the light
+  cx.font = '700 ' + Math.max(11, S * 0.42) + 'px Montserrat,sans-serif';
+  for (const c of [d.a, d.b]) { const p = find(c); if (!p) continue; cx.fillStyle = p.me ? '#00f3ff' : '#fff'; cx.beginPath(); cx.arc(X(p.x), Y(p.y), S * 0.36, 0, 6.3); cx.fill(); cx.fillStyle = '#fff'; cx.fillText('P' + c, X(p.x), Y(p.y) - S * 0.55); }
+}
+
+// ----- the live maze (hunters and survivors) -----
+function playD7m(v) {
+  const n = v.maze.n, grid = Uint8Array.from(v.maze.grid, c => +c), dist = D7.dists(grid, n, v.maze.start);
+  const G = setupD7(v, { n, g: grid, dist, distE: D7.dists(grid, n, v.maze.exit), role: v.role, zone: v.maze.zone, exit: v.maze.exit, start: v.maze.start, others: new Map(), kills: 0, deaths: 0, esc: 0, total: 0, prox: 0, beat: 0, inflight: false, duelId: null, lastRes: null, face: 0, lastSeen: 0 });
+  G.pos = { x: (v.maze.start % n) + 0.5, y: Math.floor(v.maze.start / n) + 0.5 };
+  const hunter = v.role === 'hunter';
+  // Hunters cannot enter the start zone, and the exit zone only once they have enough catches
+  const blockedAt = (x, y) => { const c = Math.floor(y) * n + Math.floor(x); return dist[c] >= 0 && dist[c] <= G.zone ? true : (G.distE[c] >= 0 && G.distE[c] <= G.zone && G.kills < v.exitKills); };
+  $('d7a').textContent = hunter ? 'HUNTER' : 'SURVIVOR';
+  say7(hunter ? 'Hunt them. ' + v.exitKills + ' catches open the exit for you.' : 'Find the exit.', 3500);
+  const doSync = async () => {
+    if (G.stopped || G.inflight || G.busy) return; G.inflight = true;
+    try {
+      const d = await call('d7sync', { x: G.pos.x, y: G.pos.y }); const s = d.sync; if (G.stopped) return;
+      if (!s) return route(d.view);   // the server answered with a screen instead: the maze is over for you
+      if (s.ended) return goView(G);
+      if (s.wait) return;
+      if (s.escaped) { G.busy = true; say7('You are out.', 1800); setTimeout(() => goView(Object.assign(G, { busy: false })), 1300); return; }
+      if (s.fix || s.tp || (s.me && (s.me.deaths > G.deaths || Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5))) G.pos = { x: s.me.x, y: s.me.y };   // hunted: back to the start
+      if (G.frozen && !s.duel && Date.now() - G.frozenAt > 3000 && (!s.dres || s.dres.id === G.lastRes)) { G.frozen = false; G.duelId = null; $('d7qte').style.display = 'none'; window.removeEventListener('keydown', G.qkd, true); }
+      G.near = s.near || [];
+      $('d7catch').style.display = hunter && G.near.length && !s.duel ? 'block' : 'none';
+      if (s.duel && G.duelId !== s.duel.id) { G.duelId = s.duel.id; startQte(G, s.duel); }
+      if (s.dres && s.dres.id !== G.lastRes) { G.lastRes = s.dres.id; qteOutcome(G, s.dres, hunter); }
+      if (s.me) {
+        if (!hunter && s.me.deaths > G.deaths) {   // hunted: nothing is lost, but you are told how much time is left
+          const t = Math.max(0, Math.floor((G.v.endsAt - (Date.now() + G.offset)) / 1000)), tt = Math.floor(t / 60) + ':' + pad2(t % 60);
+          const msgs = ['You got hunted. You won\'t die. You still have ' + tt + '.', 'You got hunted; you won\'t die; you still have ' + tt + ' left.', 'The hunter found you. You are not dead. You still have ' + tt + '.', 'Hunted, but alive. ' + tt + ' remain.'];
+          say7(msgs[Math.floor(Math.random() * msgs.length)], 4000); if (ac7) ac7.thump(0.6);
+        }
+        if (hunter && s.me.kills > G.kills) {
+          if (s.me.kills >= v.exitKills && G.kills < v.exitKills) say7('Enough catches. The exit is open to you.', 4000); else say7('Caught one. (' + s.me.kills + ')', 1800);
+          if (ac7) ac7.thump(0.5);
+        }
+        G.deaths = s.me.deaths; G.kills = s.me.kills; G.inv = s.me.inv;
+      }
+      G.esc = s.esc; G.total = s.total; G.left = s.left;
+      const seen = new Set();
+      for (const o of s.others || []) { seen.add(o.i); const c = G.others.get(o.i); if (c) { c.tx = o.x; c.ty = o.y; c.r = o.r; c.s = o.s; c.t = Date.now(); } else G.others.set(o.i, { x: o.x, y: o.y, tx: o.x, ty: o.y, r: o.r, s: o.s, t: Date.now() }); }
+      for (const [k, c] of G.others) if (!seen.has(k) && Date.now() - c.t > 900) G.others.delete(k);
+    } catch (x) { if (x && x.error && !x.kicked) say7(x.error, 1500); }
+    finally { G.inflight = false; }
+  };
+  G.catchGo = async () => { if (!G.near || !G.near.length) return; $('d7catch').style.display = 'none'; G.frozen = true; G.frozenAt = Date.now(); try { await call('d7duel', { target: G.near[0] }); } catch {} doSync(); };
+  $('d7catch').onclick = G.catchGo;
+  G.ckd = e => { if (e.code === 'Space' && hunter && !G.frozen && G.near && G.near.length) { e.preventDefault(); G.catchGo(); } };
+  window.addEventListener('keydown', G.ckd);
+  G.sync = setInterval(doSync, 250);
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const left = clock7(G); $('d7b').textContent = G.esc + ' / ' + G.total + ' escaped';
+    $('d7a').textContent = hunter ? 'HUNTER - ' + G.kills + ' / ' + v.exitKills + ' catches' : 'SURVIVOR';
+    if (left <= -2500) return goView(G);
+    const [ix, iy] = inputVec(G);
+    if (!G.busy && !G.frozen) {
+      const before = { x: G.pos.x, y: G.pos.y };
+      D7.move(grid, n, G.pos, ix, iy, dt);
+      if (hunter && blockedAt(G.pos.x, G.pos.y)) { G.pos.x = before.x; G.pos.y = before.y; }   // hunters cannot enter the safe zones
+      if (ix || iy) { const a = Math.atan2(iy, ix); let d = a - G.face; d = Math.atan2(Math.sin(d), Math.cos(d)); G.face += d * Math.min(1, dt * 12); }
+    }
+    let near = 99;
+    for (const c of G.others.values()) {
+      c.x += (c.tx - c.x) * Math.min(1, dt * 9); c.y += (c.ty - c.y) * Math.min(1, dt * 9);
+      const d = Math.hypot(c.x - G.pos.x, c.y - G.pos.y);
+      if (!hunter && c.r === 'h') near = Math.min(near, d);
+    }
+    G.prox += (Math.max(0, Math.min(1, 1 - (near - 2) / 9)) - G.prox) * Math.min(1, dt * 3);
+    if (ac7) { G.beat -= dt; if (G.beat <= 0) { ac7.thump(0.10 + 0.35 * G.prox); setTimeout(() => ac7 && ac7.thump(0.06 + 0.25 * G.prox), 180); G.beat = 1.2 - 0.75 * G.prox; } }
+    G.fade = Math.max(0, G.fade - dt * 0.8);
+    drawMaze(G, hunter);
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
+}
+
+// ----- the catch duel: 5 quick buttons, a circle closes around each one -----
+function startQte(G, d) {
+  G.frozen = true; G.frozenAt = Date.now(); $('d7catch').style.display = 'none';
+  const box = $('d7qte'), area = $('d7qt'), touch = matchMedia('(pointer:coarse)').matches, hits = new Array(d.prompts.length).fill(null);
+  box.style.display = 'block'; [...box.querySelectorAll('.qb')].forEach(e => e.remove());
+  const hunter = d.role === 'h', t0 = d.start - G.offset;   // local time when the first button counts
+  area.textContent = hunter ? 'Catch! Hit more buttons than the survivor.' : 'A hunter is on you! Hit more buttons than they do (a tie is yours).';
+  let cur = -1, el = null, shownAt = 0, done = false;
+  const press = (i, key) => {
+    if (i !== cur || hits[i]) return; const ms = Date.now() - shownAt;
+    if (key !== d.prompts[i].k) { hits[i] = { k: key, ms: 99999 }; el.classList.add('no'); } else { hits[i] = { k: key, ms }; el.classList.add('ok'); }
+  };
+  G.qkd = e => { if (cur < 0 || touch) return; const k = e.key.toUpperCase(); if (k.length === 1 && /[A-Z]/.test(k)) { e.preventDefault(); press(cur, k); } };
+  window.addEventListener('keydown', G.qkd, true);
+  const show1 = i => {
+    const p = d.prompts[i]; cur = i; shownAt = Date.now();
+    el = document.createElement('div'); el.className = 'qb'; el.style.left = p.x + '%'; el.style.top = p.y + '%';
+    el.innerHTML = '<i></i>' + (touch ? '●' : p.k);
+    el.onpointerdown = e => { e.preventDefault(); press(i, p.k); };
+    box.appendChild(el);
+    const ring = el.firstChild; ring.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(0.62)', opacity: 1 }], { duration: d.win, easing: 'linear', fill: 'forwards' });
+    setTimeout(() => { if (el && el.parentNode) el.remove(); cur = -1; }, d.win + 120);
+  };
+  d.prompts.forEach((p, i) => setTimeout(() => { if (!G.stopped) show1(i); }, Math.max(0, t0 + p.at - Date.now())));
+  const endIn = Math.max(0, t0 + d.prompts[d.prompts.length - 1].at + d.win + 250 - Date.now());
+  setTimeout(async () => {
+    if (done || G.stopped) return; done = true; window.removeEventListener('keydown', G.qkd, true);
+    area.textContent = 'Waiting for the other player...';
+    for (let t = 0; t < 4; t++) { try { await call('d7duelres', { id: d.id, hits }); break; } catch { await new Promise(r => setTimeout(r, 600)); } }
+  }, endIn);
+}
+function qteOutcome(G, r, hunter) {
+  window.removeEventListener('keydown', G.qkd, true);
+  $('d7qte').style.display = 'none'; G.frozen = false; G.duelId = null;
+  const t = Math.max(0, Math.floor((G.v.endsAt - (Date.now() + G.offset)) / 1000)), tt = Math.floor(t / 60) + ':' + pad2(t % 60);
+  if (r.out === 'caught') say7(hunter ? 'Caught! You were moved somewhere else.' : 'You got hunted. You won\'t die. You still have ' + tt + '.', 4000);
+  else if (r.out === 'escape') say7(hunter ? 'He slipped away.' : 'You got away!', 3000);
+  
+  if (ac7) ac7.thump(0.6);
+}
+// Draws the maze around (px, py). dark = the flashlight view; spectators see a wide, softly lit area.
+function drawMaze(G, hunter, spec) {
+  const { cx, cv, dk, dx, n, g } = G, W = cv.width, H = cv.height, S = Math.max(24, Math.min(46, Math.min(innerWidth, innerHeight) / 13)) * G.r;
+  const px = spec ? G.cam.x : G.pos.x, py = spec ? G.cam.y : G.pos.y, ox = W / 2 - px * S, oy = H / 2 - py * S;
+  cx.fillStyle = '#050508'; cx.fillRect(0, 0, W, H);
+  const x0 = Math.max(0, Math.floor(-ox / S)), x1 = Math.min(n - 1, Math.ceil((W - ox) / S)), y0 = Math.max(0, Math.floor(-oy / S)), y1 = Math.min(n - 1, Math.ceil((H - oy) / S));
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+    const i = y * n + x, d = G.dist[i], de = G.distE ? G.distE[i] : -1;
+    cx.fillStyle = g[i] ? '#2b2b38' : (d >= 0 && d <= G.zone ? '#10241a' : (de >= 0 && de <= G.zone ? '#10222a' : '#14141b'));   // safe zones: faintly green at the start, faintly blue at the exit
+    cx.fillRect(ox + x * S, oy + y * S, S + 1, S + 1);
+  }
+  const ex = G.exit % n, ey = Math.floor(G.exit / n), gl = 0.55 + 0.25 * Math.sin(G.t * 1.6);
+  cx.fillStyle = 'rgba(57,255,20,' + gl + ')'; cx.beginPath(); cx.arc(ox + (ex + 0.5) * S, oy + (ey + 0.5) * S, S * 0.38, 0, 7); cx.fill();
+  const dot = (x, y, r, col, shield, label) => {
+    cx.fillStyle = col; cx.shadowColor = col; cx.shadowBlur = 14 * G.r; cx.beginPath(); cx.arc(ox + x * S, oy + y * S, S * 0.3, 0, 7); cx.fill(); cx.shadowBlur = 0;
+    if (shield) { cx.strokeStyle = 'rgba(255,255,255,.7)'; cx.lineWidth = 2 * G.r; cx.beginPath(); cx.arc(ox + x * S, oy + y * S, S * 0.45, 0, 7); cx.stroke(); }
+    if (label) { cx.fillStyle = '#ddd'; cx.font = (11 * G.r) + 'px Montserrat,sans-serif'; cx.textAlign = 'center'; cx.fillText(label, ox + x * S, oy + y * S - S * 0.5); }
+  };
+  if (spec) { for (const p of G.players) dot(p.x, p.y, 0, p.r === 'h' ? '#ff0055' : '#00f3ff', p.s, (p.r === 'h' ? 'H' : 'S') + (p.i + 1)); }
+  else {
+    for (const c of G.others.values()) dot(c.x, c.y, 0, c.r === 'h' ? '#ff0055' : '#00f3ff', c.s);
+    const inv = (G.inv || 0) > Date.now() + G.offset;
+    dot(G.pos.x, G.pos.y, 0, hunter ? '#ffb0c4' : '#e8f4ff', inv);
+  }
+  // darkness: a flashlight cone for players, a wide soft light for the spectator
+  dx.globalCompositeOperation = 'source-over'; dx.clearRect(0, 0, W, H); dx.fillStyle = spec ? 'rgba(0,0,0,.55)' : 'rgba(0,0,0,.985)'; dx.fillRect(0, 0, W, H);
+  dx.globalCompositeOperation = 'destination-out';
+  if (spec) { const gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 9); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = gr; dx.beginPath(); dx.arc(W / 2, H / 2, S * 9, 0, 7); dx.fill(); }
+  else {
+    let gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 2.4); gr.addColorStop(0, 'rgba(0,0,0,1)'); gr.addColorStop(1, 'rgba(0,0,0,0)'); dx.fillStyle = gr; dx.beginPath(); dx.arc(W / 2, H / 2, S * 2.4, 0, 7); dx.fill();
+    gr = dx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, S * 7); gr.addColorStop(0, 'rgba(0,0,0,.95)'); gr.addColorStop(0.7, 'rgba(0,0,0,.5)'); gr.addColorStop(1, 'rgba(0,0,0,0)');
+    dx.fillStyle = gr; dx.beginPath(); dx.moveTo(W / 2, H / 2); dx.arc(W / 2, H / 2, S * 7, G.face - 0.42, G.face + 0.42); dx.closePath(); dx.fill();
+  }
+  cx.drawImage(dk, 0, 0);
+  if (!spec && G.prox > 0.02) { const vg = cx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(120,0,30,0)'); vg.addColorStop(1, 'rgba(120,0,30,' + (0.55 * G.prox) + ')'); cx.fillStyle = vg; cx.fillRect(0, 0, W, H); }
+  if (G.fade > 0) { cx.fillStyle = 'rgba(0,0,0,' + G.fade + ')'; cx.fillRect(0, 0, W, H); }
+  if (G.joy && !spec) { cx.strokeStyle = 'rgba(255,255,255,.25)'; cx.lineWidth = 2 * G.r; cx.beginPath(); cx.arc(G.joy.ox * G.r, G.joy.oy * G.r, 40 * G.r, 0, 7); cx.stroke(); cx.fillStyle = 'rgba(255,255,255,.25)'; cx.beginPath(); cx.arc(G.joy.x * G.r, G.joy.y * G.r, 16 * G.r, 0, 7); cx.fill(); }
+}
+
+// ----- the spectator (the odd player out) -----
+function playD7s(v) {
+  const G = setupD7(v, { room: null, players: [], follow: 0, cam: { x: 1.5, y: 1.5 }, esc: 0, total: 0, n: 0, g: null, dist: null, exit: 0, zone: 0, others: new Map() });
+  $('d7a').textContent = 'SPECTATOR'; $('d7sp').style.display = 'flex'; say7('Watching.', 2000);
+  const rooms = []; let want = true;
+  const sel = $('d7room'); sel.onchange = () => { G.room = sel.value; want = true; G.follow = 0; };
+  $('d7prev').onclick = () => { G.follow = (G.follow - 1 + Math.max(1, G.players.length)) % Math.max(1, G.players.length); };
+  $('d7next').onclick = () => { G.follow = (G.follow + 1) % Math.max(1, G.players.length); };
+  const doSync = async () => {
+    if (G.stopped || G.busy || G.inflight) return; G.inflight = true;
+    try {
+      const d = await call('d7spec', { room: G.room, wantMaze: want }); const s = d.sync; if (G.stopped) return;
+      if (!s) return route(d.view);
+      if (s.ended) return goView(G);
+      if (s.wait) return;
+      if (s.maze) { G.n = s.maze.n; G.g = Uint8Array.from(s.maze.grid, c => +c); G.dist = D7.dists(G.g, G.n, s.maze.start); G.distE = D7.dists(G.g, G.n, s.maze.exit); G.exit = s.maze.exit; G.zone = s.maze.zone; want = false; }
+      G.room = s.room; if (!rooms.length || rooms.length !== s.rooms.length) { rooms.length = 0; s.rooms.forEach(r => rooms.push(r)); sel.innerHTML = rooms.map(r => '<option value="' + r.id + '">' + r.label + '</option>').join(''); }
+      sel.value = s.room; G.players = s.players.sort((a, b) => a.i - b.i); G.esc = s.esc; G.total = s.total;
+    } catch {} finally { G.inflight = false; }
+  };
+  G.sync = setInterval(doSync, 400); doSync();
+  const loop = now => {
+    if (G.stopped) return;
+    const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
+    const left = clock7(G); $('d7b').textContent = G.esc + ' / ' + G.total + ' escaped';
+    if (left <= -2500) return goView(G);
+    if (G.g) {
+      const t = G.players[Math.min(G.follow, G.players.length - 1)];
+      if (t) { G.cam.x += (t.x - G.cam.x) * Math.min(1, dt * 6); G.cam.y += (t.y - G.cam.y) * Math.min(1, dt * 6); $('d7a').textContent = (t.r === 'h' ? 'HUNTER ' : 'SURVIVOR ') + (t.i + 1) + (t.r === 'h' ? ' - ' + t.k + ' catches' : ' - hunted ' + t.d + 'x'); }
+      drawMaze(G, false, true);
+    }
+    G.raf = requestAnimationFrame(loop);
+  };
+  G.raf = requestAnimationFrame(loop);
+}
+
+// ----- the tightrope -----
+function initRope(G, v) {
+  G.rp = v.rope; G.s = { th: 0, w: 0 }; G.prog = 0; G.rt = 0; G.hold = 3; G.fell = 0; G.wx = 0; G.frac = 0; G.streaks = Array.from({ length: 26 }, () => ({ x: Math.random(), y: Math.random() }));
+  say7('Do not look down.', 2600);
+}
+async function finishSeg(G) {
+  if (G.busy) return; G.busy = true; say7('Across.', 1600);
+  try { const d = await call('d7seg', { seg: G.v.seg }); setTimeout(() => route(d.view), 1300); }
+  catch (x) { G.busy = false; say7((x && x.error) || 'Connection error.', 2500); }
+}
+function stepRope(G, dt, cx, cv) {
+  const W = cv.width, H = cv.height, P = G.rp;
+  let u = (G.keys.arrowright || G.keys.d ? 1 : 0) - (G.keys.arrowleft || G.keys.a ? 1 : 0);
+  if (G.joy) u = G.joy.x > innerWidth / 2 ? 1 : -1;
+  G.rt += dt;
+  const ramp = Math.min(1, Math.max(0, (G.rt - 2.5) / 2.5)), wind = D7.windAt(G.rt, P.amp, P.seed) * ramp;
+  if (G.fell > 0) { G.fell -= dt; if (G.fell <= 0) { G.s = { th: 0, w: 0 }; G.prog = 0; G.rt = 0; } }
+  else if (!G.busy) {
+    D7.ropeStep(G.s, u, wind, dt);
+    G.prog += D7.ropeSpeed(G.s.th) * dt * ramp;
+    if (Math.abs(G.s.th) >= 1) { G.falls++; G.fell = 2; say7('You fall.', 1800); }
+    if (G.prog >= P.len) finishSeg(G);
+  }
+  G.frac = Math.min(0.99, G.prog / P.len); G.wx = wind;
+  if (ac7) { ac7.wind.gain.value = Math.min(0.2, Math.abs(wind) * 0.14); ac7.wind.context.currentTime; }
+  // draw
+  const gr = cx.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#07070c'); gr.addColorStop(1, '#15101a'); cx.fillStyle = gr; cx.fillRect(0, 0, W, H);
+  cx.strokeStyle = 'rgba(255,255,255,.07)'; cx.lineWidth = 1.5 * G.r;
+  for (const s of G.streaks) { s.x += (wind * 0.25 + 0.02) * dt; s.x = (s.x + 2) % 1; cx.beginPath(); cx.moveTo(s.x * W, s.y * H); cx.lineTo(s.x * W + wind * 60 * G.r, s.y * H); cx.stroke(); }
+  const ry = H * 0.62, cxm = W / 2, fall = G.fell > 0 ? 1 - G.fell / 2 : 0;
+  cx.strokeStyle = '#bdbdcc'; cx.lineWidth = 3 * G.r; cx.beginPath(); cx.moveTo(0, ry); cx.lineTo(W, ry); cx.stroke();
+  cx.strokeStyle = 'rgba(255,255,255,.08)'; cx.lineWidth = 1 * G.r; for (let i = -8; i < 24; i++) { const x = ((i * 120 - G.prog * 2.2) % (W + 240)) ; cx.beginPath(); cx.moveTo(x, ry + 6); cx.lineTo(x, ry + 70 * G.r); cx.stroke(); }
+  const ang = Math.max(-1.2, Math.min(1.2, G.s.th * 0.9)), body = 90 * G.r, py = ry + fall * fall * H * 0.5;
+  cx.save(); cx.translate(cxm, py); cx.rotate(ang);
+  cx.strokeStyle = '#e8f4ff'; cx.lineWidth = 6 * G.r; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(0, 0); cx.lineTo(0, -body); cx.stroke();
+  cx.beginPath(); cx.arc(0, -body - 14 * G.r, 12 * G.r, 0, 7); cx.fillStyle = '#e8f4ff'; cx.fill();
+  cx.lineWidth = 3 * G.r; cx.beginPath(); cx.moveTo(-110 * G.r, -body * 0.65); cx.lineTo(110 * G.r, -body * 0.65); cx.stroke(); cx.restore();
+  // balance meter and progress
+  const bw = Math.min(W * 0.6, 420 * G.r), by = 60 * G.r;
+  cx.fillStyle = 'rgba(255,255,255,.12)'; cx.fillRect(cxm - bw / 2, by, bw, 8 * G.r);
+  const danger = Math.min(1, Math.abs(G.s.th)); cx.fillStyle = 'rgba(' + Math.round(80 + 175 * danger) + ',' + Math.round(220 - 160 * danger) + ',90,.9)'; cx.fillRect(cxm + G.s.th * bw / 2 - 5 * G.r, by - 4 * G.r, 10 * G.r, 16 * G.r);
+  cx.fillStyle = 'rgba(255,255,255,.18)'; cx.fillRect(cxm - bw / 2, H - 28 * G.r, bw, 5 * G.r); cx.fillStyle = '#39ff14'; cx.fillRect(cxm - bw / 2, H - 28 * G.r, bw * G.frac, 5 * G.r);
+  if (G.fell > 0) { cx.fillStyle = 'rgba(0,0,0,' + Math.min(0.85, fall) + ')'; cx.fillRect(0, 0, W, H); }
+}
+
+// ---- Fullscreen notice ----
+// Browsers only allow fullscreen after a click or tap, so the page asks first.
+// If the browser has no fullscreen support (iPhone Safari), the notice is skipped.
+{
+  const el = document.documentElement, req = el.requestFullscreen || el.webkitRequestFullscreen;
+  if (req && !document.fullscreenElement && !document.webkitFullscreenElement) $('fs').classList.add('on');
+  $('fsGo').onclick = () => { try { Promise.resolve(req.call(el)).catch(() => {}); } catch {} $('fs').classList.remove('on'); };
+  $('fsNo').onclick = () => $('fs').classList.remove('on');
+}
+
+// ---- Admin test tab ----
+// The admin panel opens this page as  /#as=<token>. The token lives only in this tab (sessionStorage),
+// so every tab can be a different test player. It is useless without the admin signing in first.
+(async () => {
+  let t = null;
+  try { const m = location.hash.match(/^#as=([\w.\-]+)/); if (m) { t = m[1]; sessionStorage.setItem('t9_as', t); history.replaceState(null, '', location.pathname); } else t = sessionStorage.getItem('t9_as'); } catch {}
+  if (!t) return;
+  let who = '?'; try { who = JSON.parse(atob(t.split('.')[0].replace(/-/g, '+').replace(/_/g, '/'))).uid; } catch {}
+  token = t; $('fs').classList.remove('on');
+  document.title = 'TEST ' + who;
+  const tag = document.createElement('div');
+  tag.textContent = 'ADMIN TEST - ' + who;
+  tag.style.cssText = 'position:fixed;bottom:8px;left:50%;transform:translateX(-50%);z-index:99;font:700 11px Montserrat,sans-serif;letter-spacing:2px;color:#000;background:#ffd400;border-radius:6px;padding:4px 10px;pointer-events:none';
+  document.body.appendChild(tag);
+  try { route((await call('view')).view); } catch (x) { token = null; try { sessionStorage.removeItem('t9_as'); } catch {} $('err').textContent = (x && x.error) || 'Test tab expired. Open it again from the admin panel.'; }
+})();
+</script>
+</body>
+</html>
