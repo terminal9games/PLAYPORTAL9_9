@@ -342,6 +342,8 @@ module.exports = async (req, res) => {
     }
     if (day === 7 && live() && d7 && run7) {
       if (action === 'd7sync' && d7.state === 'maze' && d7.role !== 'spec') return res.json({ sync: await L7.sync(uid, d7, run7, now, req.body), now });
+      if (action === 'd7duel' && d7.state === 'maze' && d7.role === 'hunter') return res.json({ sync: await L7.duelStart(uid, d7, run7, now, req.body), now });
+      if (action === 'd7duelres' && d7.state === 'maze' && d7.role !== 'spec') return res.json({ sync: await L7.duelResult(uid, d7, run7, now, req.body), now });
       if (action === 'd7spec' && d7.state === 'maze' && d7.role === 'spec') return res.json({ sync: await L7.spec(uid, d7, run7, now, req.body), now });
       const finish = async () => {
         d7.done = true; d7.finished = now; d7.total = now - d7.rstart; d7.prog = D7.units(cfg7);
