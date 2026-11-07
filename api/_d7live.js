@@ -58,9 +58,9 @@ async function sync(uid, d7, run, now, body) {
     if (claims.length && now - (prev.atk || 0) >= D7.ATK_COOLDOWN) {
       for (const idx of claims) {
         const tuid = survivorsIn(mem).find(u => mem[u].i === idx), t = tuid && P[tuid];
-        // survivors in the start or exit zone cannot be hunted; a hunted survivor stays where they are (a short shield stops a second hit)
+        // survivors in the start or exit zone cannot be hunted; a hunted survivor goes back to the start (a 4 s shield stops a second hit)
         if (!t || t.gone || (t.inv || 0) > now || Math.hypot(x - t.x, y - t.y) > D7.HIT || D7.zoneOf(m, c, cellOf(m, t.x, t.y))) continue;
-        const tx = await db.ref(`rooms7/${rid}/p/${tuid}`).transaction(cur => (!cur || cur.gone || (cur.inv || 0) > now) ? undefined : { ...cur, inv: now + D7.SPAWN_SHIELD, deaths: (cur.deaths || 0) + 1 });
+        const tx = await db.ref(`rooms7/${rid}/p/${tuid}`).transaction(cur => (!cur || cur.gone || (cur.inv || 0) > now) ? undefined : { ...cur, x: D7.cellXY(m.n, m.start).x, y: D7.cellXY(m.n, m.start).y, at: now, inv: now + D7.SPAWN_SHIELD, deaths: (cur.deaths || 0) + 1 });
         if (!tx.committed) continue;
         kills++; killed.push(idx); up.atk = now; t.inv = now + D7.SPAWN_SHIELD;
         tp = pickTeleport(m, c, P, mem); up.ringAt = null;   // every catch sends the hunter somewhere else
