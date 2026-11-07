@@ -1,13 +1,18 @@
 const { admin, db, maintain, closeNow, closeOnce, newId, secLog, sign, phase5, label5, resolveMaze7 } = require('./_lib');
 const D6 = require('./_d6');
 const D7 = require('./_d7');
+const D8 = require('./_d8');
+const L8 = require('./_d8live');
 const { simulate } = require('./_sim');
 const rnd = arr => arr[Math.floor(Math.random() * arr.length)];
 
 // Day 7 leftovers: the maze run, rooms and every player's progress. Called when Day 7 is reactivated or reset.
 async function wipe7() { await Promise.all(['d7', 'rooms7', 'd7meta', 'd7trace', 'config/day7run'].map(p => db.ref(p).remove())); }
 // One player's Day 7 progress (used when the admin revives or moves that player)
+// Day 8 leftovers: the final's run, room, codes and chat
+async function wipe8() { await Promise.all(['rooms8', 'config/day8run', 'chats/day8'].map(p => db.ref(p).remove())); }
 async function wipePlayer7(id) {
+  { const u = String(id).toUpperCase(); await db.ref().update({ ['rooms8/m/' + u]: null, ['rooms8/p/' + u]: null }); }
   const u = String(id).toUpperCase(), d = (await db.ref('d7/' + u).get()).val(), up = { ['d7/' + u]: null };
   if (d && d.room) { up[`rooms7/${d.room}/m/${u}`] = null; up[`rooms7/${d.room}/p/${u}`] = null; }
   await db.ref().update(up);
@@ -61,12 +66,13 @@ module.exports = async (req, res) => {
       const d7run = (await db.ref('config/day7run').get()).val();
       const d7rooms = (await db.ref('rooms7').get()).val() || {};
       const d7done = (await db.ref('d7meta/done').get()).val() || 0;
+      const d8cfg = D8.cfg((await db.ref('config/day8').get()).val()), d8run = (await db.ref('config/day8run').get()).val(), d8 = (await db.ref('rooms8').get()).val() || {};
       const testMode = !!(await db.ref('config/test_mode').get()).val();
       const players = pl.val() || {};
       Object.keys(players).forEach(k => { delete players[k].sid; delete players[k].ipk; });   // session internals never leave the server
       const sec = [];
       (await db.ref('seclog').orderByKey().limitToLast(40).get()).forEach(c => { sec.push(c.val()); });
-      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, day7: { cfg: d7cfg, run: d7run ? { start: d7run.start, mazeEnd: d7run.mazeEnd, resolved: !!d7run.resolved } : null, rooms: d7rooms, data: d7, done: d7done, units: D7.units(d7cfg) }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
+      return res.json({ testMode, seclog: sec.reverse(), players, day4: d4, day5: { cfg: d5cfg, groups: d5groups }, day6: { cfg: d6cfg, data: d6, links: d6links }, day7: { cfg: d7cfg, run: d7run ? { start: d7run.start, mazeEnd: d7run.mazeEnd, resolved: !!d7run.resolved } : null, rooms: d7rooms, data: d7, done: d7done, units: D7.units(d7cfg) }, day8: { cfg: d8cfg, run: d8run ? { chatEnd: d8run.chatEnd, start: d8run.start } : null, members: d8.m || null, st: d8.st ? { over: d8.st.over || null, dead: Object.keys(d8.st.dead || {}).length, duel: !!d8.st.duel, knife: !!d8.st.knife, wheelAt: d8.st.wheelAt || null } : null }, activeDay: st.day, endsAt: st.endsAt, closed: st.closed, now: Date.now() });
     }
     if (action === 'setDay') {
       // Moving forward closes the previous day first, so players who did not play it are eliminated
@@ -79,6 +85,7 @@ module.exports = async (req, res) => {
       if (Number(value) === 1.5) await db.ref('d15').remove();
       if (Number(value) === 6) await Promise.all([db.ref('d6').remove(), db.ref('d6links').remove()]);
       if (Number(value) === 7) await wipe7();
+      if (Number(value) === 8) await wipe8();
       if (Number(value) === 5) await Promise.all([db.ref('groups/day5').remove(), db.ref('chats/day5').remove(), db.ref('config/day5').remove()]);
     } else if (action === 'close') {
       return res.json({ closed: await closeNow() });
@@ -154,6 +161,57 @@ module.exports = async (req, res) => {
       if (!run) return res.status(400).json({ error: 'The maze has not been started.' });
       if (!run.resolved) { await db.ref('config/day7run/mazeEnd').set(Date.now()); await resolveMaze7(Date.now()); }
       return res.json({ ok: true });
+    }
+    else if (action === 'setDay8') {
+      const b = req.body, cur = D8.cfg((await db.ref('config/day8').get()).val());
+      const f = {}; Object.keys(D8.DEFAULTS).forEach(k => { f[k] = b[k] === '' || b[k] == null ? cur[k] : b[k]; });
+      const next = D8.cfg(f);
+      await db.ref('config/day8').set(next);
+      return res.json({ cfg: next });
+    }
+    else if (action === 'start8') {
+      // Draws a code (P1, P2...) for every finalist and opens the briefing and chat. After chatMin minutes the chat
+      // disappears and the lobby starts; after the lobby the room opens. Settings are frozen in the run.
+      const c = D8.cfg((await db.ref('config/day8').get()).val());
+      const s = (await db.ref('players').get()).val() || {};
+      const tm = !!(await db.ref('config/test_mode').get()).val();
+      const ids = Object.keys(s).filter(i => s[i].status === 'active' && s[i].current_day === 8 && !!s[i].test === tm);
+      if (ids.length < 1) return res.status(400).json({ error: 'Need at least 1 active player on Day 8 (there are 0).' + tmHint(s, 8, tm) });
+      const now = Date.now(), room = D8.room(c.size), codes = L8.assign(ids), pos = D8.spawns(room, ids.length), up = {};
+      await wipe8();
+      ids.forEach((u, i) => { up[`rooms8/m/${u}`] = { c: codes[u], ...(s[u].test && req.body.bots ? { bot: true } : {}) }; up[`rooms8/p/${u}`] = { x: pos[i].x, y: pos[i].y, at: now }; });
+      up['rooms8/st'] = { seq: 0, dead: {}, feed: {} };
+      const chatEnd = now + c.chatMin * 60000;
+      up['config/day8run'] = { chatEnd, start: chatEnd + c.lobby * 1000, cfg: c };
+      await db.ref().update(up);
+      return res.json({ players: ids.length, chatEnd, start: chatEnd + c.lobby * 1000 });
+    }
+    else if (action === 'skip8') {
+      // Jumps to the lobby / the room (to test without waiting): which = 'lobby' or 'play'
+      const run = (await db.ref('config/day8run').get()).val();
+      if (!run) return res.status(400).json({ error: 'The final has not been started.' });
+      const now = Date.now(), lobby = run.cfg.lobby * 1000;
+      const up = req.body.which === 'play' ? { chatEnd: now - 1000, start: now + 1500 } : { chatEnd: now, start: now + lobby };
+      await db.ref('config/day8run').update(up);
+      return res.json({ ok: true, ...up });
+    }
+    else if (action === 'end8') {
+      // Ends the final right now: if several players are still alive, one of them is picked at random as the winner
+      const run = (await db.ref('config/day8run').get()).val();
+      if (!run) return res.status(400).json({ error: 'The final has not been started.' });
+      await L8.force(run, Date.now());
+      return res.json({ ok: true });
+    }
+    else if (action === 'reset8') {
+      // Clears every trace of the final. With revive, players eliminated on Day 8 (and the winner) go back to active on Day 8.
+      await wipe8();
+      let revived = 0;
+      if (req.body.revive) {
+        const all = (await db.ref('players').get()).val() || {}, up = {};
+        Object.keys(all).forEach(i => { if ((all[i].status === 'eliminated' && all[i].eliminated_day === 8) || (all[i].status === 'winner' && all[i].current_day === 8)) { up[`players/${i}/status`] = 'active'; up[`players/${i}/current_day`] = 8; up[`players/${i}/reveal`] = null; up[`players/${i}/eliminated_day`] = null; revived++; } });
+        if (revived) await db.ref().update(up);
+      }
+      return res.json({ ok: true, revived });
     }
     else if (action === 'start5') {
       // Forms groups of about 4 from the active Day 5 players, picks one secret traitor per group,
@@ -289,6 +347,11 @@ module.exports = async (req, res) => {
             up['d7/' + b] = s; n++;
           }
         }
+      } else if (day === 8) {
+        // Test players in the final become bots: they walk, take the knife and duel on their own while the room is open
+        const mem = (await db.ref('rooms8/m').get()).val() || {};
+        bots.filter(b => mem[b]).forEach(b => { up[`rooms8/m/${b}/bot`] = true; n++; });
+        if (!n) return res.status(400).json({ error: 'No active test players are in the final. Start the final first.' });
       } else return res.status(400).json({ error: 'Bots do not play Day ' + day + '. Play it yourself in a test tab.' });
       if (Object.keys(up).length) await db.ref().update(up);
       return res.json({ bots: n, day });
