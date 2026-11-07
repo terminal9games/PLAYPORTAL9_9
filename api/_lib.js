@@ -156,8 +156,10 @@ async function resolveAll5(now) {
 
 
 // ---- Day 7: end of the live maze ----
-// Survivors who did not escape are out. Hunters pass only if enough survivors in their room failed to escape
-// and they made enough kills. Spectators and everyone left go on to the rope. Runs once, from the first request after the maze ends.
+// Survivors still inside when time ends are out. What happens to the hunters depends on how many of their room's survivors escaped
+// (see D7.mazeMode): at 75% or more the hunters still inside are out too; at 25% or less they all go on;
+// otherwise (small rooms, 1 vs 1, or a result in between) only those who found the exit pass. Hunters can use the exit only
+// with enough catches. Spectators and everyone who already escaped go to the rope. Runs once, after the maze ends.
 async function resolveMaze7(now, force) {
   const run = (await db.ref('config/day7run').get()).val();
   if (!run || run.resolved || (!force && now < run.mazeEnd)) return;
@@ -169,13 +171,13 @@ async function resolveMaze7(now, force) {
   for (const rid of Object.keys(rooms)) {
     const mem = rooms[rid].m || {}, P = rooms[rid].p || {}, ids = Object.keys(mem);
     const surv = ids.filter(u => mem[u].role === 'survivor'), hunt = ids.filter(u => mem[u].role === 'hunter');
-    const failed = surv.filter(u => d7[u] && d7[u].state === 'maze');
-    const win = failed.length >= Math.ceil(surv.length * c.need / 100);
-    failed.forEach(u => out(u, { role: 'survivor' }));
+    const escaped = surv.filter(u => d7[u] && d7[u].state === 'rope').length;
+    const mode = D7.mazeMode(ids.length, surv.length, escaped, c);
+    surv.forEach(u => { if (d7[u] && d7[u].state === 'maze') out(u, { role: 'survivor', mode }); });
     hunt.forEach(u => {
+      if (!(d7[u] && d7[u].state === 'maze')) return;   // already through the exit
       const k = (P[u] && P[u].kills) || 0;
-      if (!(d7[u] && d7[u].state === 'maze')) return;
-      if (win && k >= c.minKills) { done[u] = 1; up[`d7/${u}/state`] = 'rope'; } else out(u, { role: 'hunter', kills: k, team: win });
+      if (mode === 'lo' && k >= c.minKills) { done[u] = 1; up[`d7/${u}/state`] = 'rope'; } else out(u, { role: 'hunter', kills: k, mode });
     });
   }
   Object.keys(d7).forEach(u => { if (d7[u].state === 'maze' && !done[u]) up[`d7/${u}/state`] = 'rope'; });   // spectators
