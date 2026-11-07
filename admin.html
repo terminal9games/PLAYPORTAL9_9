@@ -104,6 +104,14 @@
     <div id="d7info" style="font-size:13px;margin-top:8px"></div>
   </div>
   <div class="card">
+    <h1>Day 8 - The Elimination Wheel (the final)</h1>
+    <p style="font-size:13px;color:#bbb;margin:0 0 10px">Press "Open the final" when the finalists are on Day 8. Every finalist gets a random code (P1, P2...) and sees a briefing with the numbers and a chat. When the chat time ends the chat disappears and the lobby starts; after the lobby the room opens. In the room the wheel appears at random (wheel min to max minutes after the previous duel) and picks 2 players for a quick-draw duel in front of everyone: the button turns green at a random moment; shooting early or slower eliminates. Knives appear at random: whoever picks one has a few seconds to stab someone close. Last player alive wins and sees the winner screen with the prize.</p>
+    <div class="row" style="font-size:13px"><input id="d8cm" type="number" min="0" max="120" step="any" value="10" style="width:64px;margin:0"> chat min <input id="d8lb" type="number" min="5" max="900" step="any" value="60" style="width:64px;margin:0"> lobby s <input id="d8wmn" type="number" min="0.1" max="60" step="any" value="5" style="width:64px;margin:0"> wheel min (minutes) <input id="d8wmx" type="number" min="0.1" max="90" step="any" value="10" style="width:64px;margin:0"> wheel max <input id="d8kmn" type="number" min="0.1" max="60" step="any" value="2" style="width:64px;margin:0"> knife min (minutes) <input id="d8kmx" type="number" min="0.1" max="90" step="any" value="4" style="width:64px;margin:0"> knife max <input id="d8ks" type="number" min="2" max="20" step="any" value="5" style="width:64px;margin:0"> knife seconds <input id="d8dmn" type="number" min="1" max="15" step="any" value="2" style="width:64px;margin:0"> draw wait min s <input id="d8dmx" type="number" min="1" max="30" step="any" value="6" style="width:64px;margin:0"> draw wait max s <input id="d8sm" type="number" min="800" max="8000" step="any" value="2500" style="width:64px;margin:0"> answer ms <input id="d8mm" type="number" min="1" max="600" step="any" value="60" style="width:64px;margin:0"> sudden death after min <input id="d8sz" type="number" min="15" max="41" step="any" value="21" style="width:64px;margin:0"> room size </div>
+    <div class="row" style="font-size:13px"><input id="d8pz" maxlength="120" value="The grand prize" style="width:260px;margin:0"> prize text</div>
+    <div class="row"><label style="font-size:13px"><input type="checkbox" id="d8bots"> Test players play as bots</label><button id="d8save">Save</button><button id="d8start">Open the final</button><button id="d8lobby">Skip to lobby</button><button id="d8play">Skip to room</button><button id="d8bt">Make test players bots</button><button id="d8end">End the final now</button><button id="d8reset">Reset Day 8</button><span id="d8msg2"></span></div>
+    <div id="d8info" style="font-size:13px;margin-top:8px"></div>
+  </div>
+  <div class="card">
     <h1>Test lab</h1>
     <p style="font-size:13px;color:#bbb;margin:0 0 10px">Test players belong only to you. Each one opens in its own tab with no session or network limits, so you can play Day 5 or any group game alone. While Test mode is on, pairing, groups and day closing involve only test players, so real players are never affected.</p>
     <label><input type="checkbox" id="tmode"> Test mode</label>
@@ -248,16 +256,40 @@ $('d7reset').onclick = async () => {
   const r = await adm('reset7', { revive: rv }); $('d7msg2').textContent = r.error || ('Day 7 reset' + (r.revived ? ', ' + r.revived + ' revived' : '')); load();
 };
 $('d7end').onclick = async () => { if (!confirm('End the maze for everyone now?')) return; const r = await adm('end7'); $('d7msg2').textContent = r.error || 'Maze ended'; load(); };
+$('d8save').onclick = async () => {
+  const r = await adm('setDay8', { chatMin: $('d8cm').value, lobby: $('d8lb').value, wheelMin: $('d8wmn').value, wheelMax: $('d8wmx').value, knifeMin: $('d8kmn').value, knifeMax: $('d8kmx').value, knifeSec: $('d8ks').value, drawMin: $('d8dmn').value, drawMax: $('d8dmx').value, shootMs: $('d8sm').value, maxMin: $('d8mm').value, size: $('d8sz').value, prize: $('d8pz').value });
+  $('d8msg2').textContent = r.error || 'Saved'; setTimeout(() => $('d8msg2').textContent = '', 3000); load();
+};
+$('d8start').onclick = async () => {
+  if (!confirm('Open the final now? Codes are drawn and players see the briefing and the chat. Previous Day 8 data is erased.')) return;
+  const r = await adm('start8', { bots: $('d8bots').checked }); $('d8msg2').textContent = r.error || (r.players + ' finalist(s)'); load();
+};
+$('d8lobby').onclick = async () => { const r = await adm('skip8', { which: 'lobby' }); $('d8msg2').textContent = r.error || 'Lobby'; load(); };
+$('d8play').onclick = async () => { const r = await adm('skip8', { which: 'play' }); $('d8msg2').textContent = r.error || 'Room opening'; load(); };
+$('d8bt').onclick = async () => { const r = await adm('simBots'); $('d8msg2').textContent = r.error || (r.bots + ' bot(s)'); load(); };
+$('d8end').onclick = async () => { if (!confirm('End the final now? If several players are alive, one is picked at random as the winner.')) return; const r = await adm('end8'); $('d8msg2').textContent = r.error || 'Final ended'; load(); };
+$('d8reset').onclick = async () => {
+  if (!confirm('Erase ALL Day 8 data (codes, room, chat)?')) return;
+  const rv = confirm('Also bring back the players eliminated on Day 8 (and the winner) as active players on Day 8?\nOK = yes, Cancel = leave them.');
+  const r = await adm('reset8', { revive: rv }); $('d8msg2').textContent = r.error || ('Day 8 reset' + (r.revived ? ', ' + r.revived + ' revived' : '')); load();
+};
 let first = true;
 async function load() {
-  const { players, activeDay, endsAt, closed, now, day4, day5, day6, day7, seclog, testMode } = await adm('list');
-  $('tmode').checked = !!testMode; setTestUI(!!testMode);
+  const { players, activeDay, endsAt, closed, now, day4, day5, day6, day7, day8, seclog, testMode } = await adm('list');
+  const first0 = first; $('tmode').checked = !!testMode; setTestUI(!!testMode);
   const tids = Object.keys(players).filter(i => players[i].test).sort();
   $('tList').innerHTML = tids.length ? tids.map(i => `<button data-play="${esc(i)}">${esc(i.slice(3))} (day ${esc(players[i].current_day)}, ${esc(players[i].status)})</button>`).join(' ') : 'No test players yet.';
   if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; const c6 = (day6 && day6.cfg) || {}; $('d6m').value = c6.minutes || 40; $('d6c').value = c6.cut == null ? 40 : c6.cut; $('d6s').value = c6.side || 'cold'; first = false; }
+  if (day8) {
+    const c8 = day8.cfg, run8 = day8.run, mem = day8.members || {}, st8 = day8.st;
+    if (first0) { const f = { d8cm: 'chatMin', d8lb: 'lobby', d8wmn: 'wheelMin', d8wmx: 'wheelMax', d8kmn: 'knifeMin', d8kmx: 'knifeMax', d8ks: 'knifeSec', d8dmn: 'drawMin', d8dmx: 'drawMax', d8sm: 'shootMs', d8mm: 'maxMin', d8sz: 'size', d8pz: 'prize' }; Object.keys(f).forEach(k => { $(k).value = c8[f[k]]; }); }
+    let h8 = !run8 ? 'The final has not been opened.' : '<b>' + (now < run8.chatEnd ? 'Briefing and chat: lobby in ' + Math.ceil((run8.chatEnd - now) / 1000) + ' s' : now < run8.start ? 'Lobby: room opens in ' + Math.ceil((run8.start - now) / 1000) + ' s' : st8 && st8.over ? 'Final finished' : 'Room live' + (st8 && st8.duel ? ' - DUEL' : '') + (st8 && st8.knife ? ' - knife on the floor' : '') + (st8 && st8.wheelAt ? ' - next wheel in ' + Math.max(0, Math.round((st8.wheelAt - now) / 1000)) + ' s' : '')) + '</b>';
+    h8 += Object.keys(mem).sort((a, b) => mem[a].c - mem[b].c).map(u => '<br>P' + esc(mem[u].c) + ': ' + esc(u) + (mem[u].bot ? ' (bot)' : '') + ' - ' + esc((players[u] || {}).status || '?')).join('');
+    $('d8info').innerHTML = h8;
+  }
   if (day7) {
     const c7 = day7.cfg, d7 = day7.data || {}, rm = day7.rooms || {}, run = day7.run;
-    if (first) { const f = { d7m: 'mazeMin', d7rm: 'ropeMin', d7rs: 'roomSize', d7lb: 'lobby', d7s: 'size', d7g: 'segs', d7hi: 'hi', d7lo: 'lo', d7ek: 'exitKills', d7mk: 'minKills', d7z: 'safe', d7c: 'cut' }; Object.keys(f).forEach(k => { $(k).value = c7[f[k]]; }); }
+    if (first0) { const f = { d7m: 'mazeMin', d7rm: 'ropeMin', d7rs: 'roomSize', d7lb: 'lobby', d7s: 'size', d7g: 'segs', d7hi: 'hi', d7lo: 'lo', d7ek: 'exitKills', d7mk: 'minKills', d7z: 'safe', d7c: 'cut' }; Object.keys(f).forEach(k => { $(k).value = c7[f[k]]; }); }
     const left = run ? Math.round((run.mazeEnd - now) / 1000) : 0;
     let html = !run ? 'The maze has not been opened.' : '<b>' + (now < run.start ? 'Maze opens in ' + Math.ceil((run.start - now) / 1000) + ' s' : run.resolved ? 'Maze finished' : 'Maze live - ends in ' + Math.floor(left / 60) + 'm ' + left % 60 + 's') + '</b>';
     Object.keys(rm).forEach((rid, k) => {
