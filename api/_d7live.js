@@ -27,20 +27,18 @@ function makePrompts() {
   }
   return out;
 }
-// perfect = every button pressed (the right key, or a tap) while its circle was still open
-const perfect = (prompts, hits) => Array.isArray(hits) && hits.length === prompts.length && prompts.every((p, i) => {
-  const h = hits[i]; return h && String(h.k).toUpperCase() === p.k && Number(h.ms) >= 120 && Number(h.ms) <= QTE.win;
-});
+// score = how many of the 5 buttons were pressed right (the right key, or a tap) while the circle was still open
+const score = (prompts, hits) => !Array.isArray(hits) ? 0 : prompts.reduce((n, p, i) => { const h = hits[i]; return n + (h && String(h.k).toUpperCase() === p.k && Number(h.ms) >= 120 && Number(h.ms) <= QTE.win ? 1 : 0); }, 0);
 const inRange = (a, b, r) => Math.hypot(a.x - b.x, a.y - b.y) <= r;
 
-// Applies the result of a duel once. Survivor perfect: survivor goes on. Otherwise hunter perfect: the survivor goes back
-// to the start and the hunter is teleported. Neither perfect: nothing happens.
+// Applies the result of a duel once. The better score wins: hunter strictly better = the survivor goes back to the start and
+// the hunter is teleported; a tie or a better survivor = the survivor keeps going.
 async function resolveDuel(rid, id, now, snap, c, m) {
   const tx = await db.ref(`rooms7/${rid}/duels/${id}/done`).transaction(v => (v ? undefined : now));
   if (!tx.committed) return;
   const d = (snap.duels || {})[id], P = snap.p || {}, mem = snap.m || {};
   if (!d) return;
-  const sp = d.res && d.res.s && d.res.s.perfect, hp = d.res && d.res.h && d.res.h.perfect, outc = sp ? 'escape' : hp ? 'caught' : 'draw';
+  const sp = (d.res && d.res.s && d.res.s.score) || 0, hp = (d.res && d.res.h && d.res.h.score) || 0, outc = hp > sp ? 'caught' : 'escape';
   const up = { [`rooms7/${rid}/duels/${id}/out`]: outc }, pp = (u, k, v) => { up[`rooms7/${rid}/p/${u}/${k}`] = v; };
   const start = D7.cellXY(m.n, m.start);
   pp(d.h, 'duel', null); pp(d.s, 'duel', null); pp(d.h, 'at', now); pp(d.s, 'at', now);
@@ -142,9 +140,9 @@ async function duelResult(uid, d7, run, now, body) {
   if (!d || d.done || (d.h !== uid && d.s !== uid)) return { err: 'no' };
   const mine = d.h === uid ? 'h' : 's';
   if (d.res && d.res[mine]) return { ok: true };
-  const prompts = d.p[mine], ok = now >= d.start + prompts[prompts.length - 1].at + 120 && perfect(prompts, body.hits);   // cannot be reported before the last button even appeared
-  await db.ref(`rooms7/${rid}/duels/${body.id}/res/${mine}`).set({ perfect: !!ok, at: now });
-  const res = { ...(d.res || {}), [mine]: { perfect: !!ok } };
+  const prompts = d.p[mine], sc = now >= d.start + prompts[prompts.length - 1].at + 120 ? score(prompts, body.hits) : 0;   // cannot be reported before the last button even appeared
+  await db.ref(`rooms7/${rid}/duels/${body.id}/res/${mine}`).set({ score: sc, at: now });
+  const res = { ...(d.res || {}), [mine]: { score: sc } };
   if (res.h && res.s) { d.res = res; snap.duels[body.id] = d; await resolveDuel(rid, body.id, now, snap, c, m); }
   return { ok: true };
 }
