@@ -2,6 +2,8 @@ const { resolveMaze7, db, sign, verify, maintain, phase5, label5, resolveGroup5,
 const D6 = require('./_d6');
 const D7 = require('./_d7');
 const L7 = require('./_d7live');
+const D8 = require('./_d8');
+const L8 = require('./_d8live');
 
 // Chat filter for Day 2. Runs on the server only, so it can't be bypassed from the browser.
 // The raw text is never stored: only the censored version reaches the database.
@@ -108,7 +110,7 @@ module.exports = async (req, res) => {
       await ref.update(upd); p = await load();
     } else if (!adm) {   // admin test tabs skip the session and network rules
       if (p.sid !== sid) return res.status(401).json({ error: 'You were signed out: this ID was opened on another device.', kicked: true });
-      const fast = action === 'd7sync' || action === 'd7spec';   // sent several times a second: network rules are checked on the 20 s heartbeat instead
+      const fast = action === 'd7sync' || action === 'd7spec' || action === 'd8sync';   // sent several times a second: network rules are checked on the 20 s heartbeat instead
       if (ipk && (!fast || !p.seen || now - p.seen > 20000) && !(await ipTouch(ipk, uid, now))) return res.status(403).json({ error: IP_MSG, ipblock: true });
       if (!p.seen || now - p.seen > 20000) await ref.update({ seen: now });
     }
@@ -366,6 +368,34 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Day 8: the final (a live room run by _d8live.js). Players are known only by their code (P1, P2...).
+    // Players who are out of the room can keep watching until it ends, so these actions do not require an active player.
+    let run8 = null, m8 = null;
+    if (day === 8) {
+      run8 = (await db.ref('config/day8run').get()).val();
+      if (run8) m8 = (await db.ref('rooms8/m/' + uid).get()).val();
+    }
+    if (day === 8 && run8 && m8) {
+      if (action === 'd8chatGet' || action === 'd8chatSend') {
+        if (now >= run8.chatEnd) return res.json({ open: false, messages: [] });
+        const cref = db.ref('chats/day8');
+        if (action === 'd8chatSend') {
+          const text = clean(req.body.text);
+          if (!text) return res.status(400).json({ error: 'Write something first.' });
+          if (now - (p.chat_last || 0) < 700) return res.status(429).json({ error: 'Slow down.' });
+          await ref.update({ chat_last: now });
+          await flagIds(text, uid);
+          await cref.push({ c: m8.c, t: censor(text), ts: now });
+        }
+        const messages = [];
+        (await cref.orderByKey().limitToLast(80).get()).forEach(c => { const v = c.val(); messages.push({ who: 'P' + v.c, me: v.c === m8.c, text: v.t }); });
+        return res.json({ open: true, messages, left: run8.chatEnd - now });
+      }
+      if (action === 'd8sync') return res.json({ sync: await L8.sync(uid, run8, now, req.body), now });
+      if (action === 'd8shot') return res.json({ sync: await L8.shoot(uid, run8, now, req.body), now });
+      if (action === 'd8stab') return res.json({ sync: await L8.stab(uid, run8, now, req.body), now });
+    }
+
     const day6view = () => {
       const cap = (Number(cfg6.minutes) || 40) * 60000;
       if (!d6 || !d6.start) return { screen: 'day6intro', minutes: cap / 60000 };
@@ -394,8 +424,26 @@ module.exports = async (req, res) => {
       return { screen: 'day7', stage: 'rope', endsAt: d7.rstart + cfg7.ropeMin * 60000, now, escaped, segs: cfg7.segs, seg: d7.seg, falls: d7.falls || 0, rope: D7.rope(cfg7, d7.seg) };
     };
 
+    const day8view = async () => {
+      const prize = run8 ? run8.cfg.prize : '';
+      if (!run8 || !m8) return { screen: 'day8wait', started: !!run8 };
+      const players = (await db.ref('players').get()).val() || {}, tm = !!p.test;
+      const byDay = {}; let total = 0;
+      Object.keys(players).forEach(i => { const q = players[i]; if (!!q.test !== tm) return; total++; if (q.status === 'eliminated' && q.eliminated_day && q.eliminated_day < 8) byDay[q.eliminated_day] = (byDay[q.eliminated_day] || 0) + 1; });
+      const stats = { total, byDay, finalists: Object.keys((await db.ref('rooms8/m').get()).val() || {}).length };
+      const st = (await db.ref('rooms8/st').get()).val();
+      if (st && st.over) {
+        const w = st.winner ? ((await db.ref('rooms8/m/' + st.winner).get()).val() || {}).c : null;
+        return { screen: 'day8end', stats, winner: w, you: m8.c, won: st.winner === uid, prize, now };
+      }
+      if (now < run8.chatEnd) return { screen: 'day8intro', code: m8.c, stats, endsAt: run8.chatEnd, now, prize };
+      if (now < run8.start) return { screen: 'day8lobby', code: m8.c, startsAt: run8.start, now, count: stats.finalists };
+      return { screen: 'day8play', code: m8.c, room: D8.wire(D8.room(run8.cfg.size)), startsAt: run8.start, now, knifeSec: run8.cfg.knifeSec };
+    };
+
     let view;
-    if (p.reveal) view = { screen: 'reveal', ...p.reveal };
+    if (day === 8 && run8 && m8) view = await day8view();
+    else if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
     else if (st.ended && p.status === 'active') view = { screen: 'ended', pct: st.ended.pct };
     else if (p.status === 'winner' || p.current_day > day) view = { screen: 'passed' };
@@ -408,6 +456,7 @@ module.exports = async (req, res) => {
     else if (day === 5) view = await day5view();
     else if (day === 6) view = day6view();
     else if (day === 7) view = await day7view();
+    else if (day === 8) view = { screen: 'day8wait', started: false };
     else view = { screen: 'none', msg: 'Game not available yet.' };
 
     res.json({ token: action === 'login' ? sign(uid, sid) : undefined, view, now: Date.now() });
