@@ -384,7 +384,7 @@ module.exports = async (req, res) => {
       if (d7.state === 'maze') {
         if (d7.role === 'spec') return { screen: 'day7spec', endsAt: run7.mazeEnd, now };
         const room = run7.rooms[d7.room], m = D7.roomMaze(run7.cfg, room.k), mem = ((await db.ref(`rooms7/${d7.room}/m/${uid}`).get()).val()) || {};
-        return { screen: 'day7m', role: d7.role, me: mem.i, maze: D7.wire(m), zone: run7.cfg.zone, endsAt: run7.mazeEnd, now, hit: D7.HIT };
+        return { screen: 'day7m', role: d7.role, me: mem.i, maze: D7.wire(m, run7.cfg), exitKills: run7.cfg.exitKills, endsAt: run7.mazeEnd, now };
       }
       const escaped = (await db.ref('d7meta/done').get()).val() || 0;
       if (!d7.rstart) return { screen: 'day7ropeintro', minutes: cfg7.ropeMin, role: d7.role, wait: run7 && now < run7.mazeEnd ? run7.mazeEnd - now : 0, escaped };
