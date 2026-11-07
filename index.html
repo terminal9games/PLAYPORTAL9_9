@@ -807,8 +807,8 @@ function lobbyD7(v) {
   v.t0 = Date.now();
   $('d7lr').textContent = v.role === 'hunter' ? 'You are a HUNTER' : v.role === 'survivor' ? 'You are a SURVIVOR' : v.role === 'spec' ? 'You will watch this round' : '';
   $('d7lr').style.color = v.role === 'hunter' ? '#ff0055' : v.role === 'survivor' ? '#00f3ff' : '#aaa';
-  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark and touch them. A hunted survivor is not sent back, but every catch moves you somewhere else. You cannot enter the start or the exit area, or wait near them. With enough catches the exit opens for you too.'
-    : v.role === 'survivor' ? 'Find the exit before time runs out. If a hunter touches you, you do not die and you are not sent back, but you lose your calm. Survivors still inside when the time ends are eliminated.'
+  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark and touch them. A hunted survivor goes back to the start, and every catch moves you somewhere else. You cannot enter the start or the exit area, or wait near them. With enough catches the exit opens for you too.'
+    : v.role === 'survivor' ? 'Find the exit before time runs out. If a hunter touches you, you do not die, but you go back to the start. Survivors still inside when the time ends are eliminated.'
     : v.role === 'spec' ? 'There is an odd number of players, so you will not play in the maze. You can watch every room (roles only). You go on to the rope when the maze ends.' : 'Two teams will be chosen at random. Hunters against survivors. Headphones recommended.';
   const tick = () => { $('d7lc').textContent = t(); };
   tick(); const iv = setInterval(tick, 500);
@@ -900,7 +900,7 @@ function playD7m(v) {
       if (s.ended) return goView(G);
       if (s.wait) return;
       if (s.escaped) { G.busy = true; say7('You are out.', 1800); setTimeout(() => goView(Object.assign(G, { busy: false })), 1300); return; }
-      if (s.fix || s.tp || (s.me && Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5)) G.pos = { x: s.me.x, y: s.me.y };
+      if (s.fix || s.tp || (s.me && (s.me.deaths > G.deaths || Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5))) G.pos = { x: s.me.x, y: s.me.y };   // hunted: back to the start
       if (s.me) {
         if (!hunter && s.me.deaths > G.deaths) {   // hunted: nothing is lost, but you are told how much time is left
           const t = Math.max(0, Math.floor((G.v.endsAt - (Date.now() + G.offset)) / 1000)), tt = Math.floor(t / 60) + ':' + pad2(t % 60);
