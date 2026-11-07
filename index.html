@@ -99,6 +99,13 @@
   #d7hud { position:absolute; top:10px; left:0; right:0; z-index:2; display:flex; justify-content:space-between; padding:0 16px; font:700 12px 'Montserrat',sans-serif; color:#8a8a99; letter-spacing:1px; pointer-events:none; font-variant-numeric:tabular-nums; }
   #d7msg { position:absolute; left:0; right:0; top:42%; z-index:3; text-align:center; font:700 clamp(18px,4vw,28px) 'Montserrat',sans-serif; color:#fff; opacity:0; transition:opacity 1.2s ease; pointer-events:none; text-shadow:0 0 14px #000; }
   #d7msg.on { opacity:1; }
+  #d7catch { position:absolute; right:18px; bottom:22px; z-index:5; padding:20px 26px; font:800 20px 'Montserrat',sans-serif; letter-spacing:2px; color:#fff; background:#a01822; border:2px solid #ff6b74; border-radius:50%; box-shadow:0 0 22px #a01822; }
+  #d7qte { position:absolute; inset:0; z-index:6; background:rgba(0,0,0,.72); }
+  #d7qt { position:absolute; top:9%; left:0; right:0; text-align:center; font:700 clamp(15px,3.4vw,22px) 'Montserrat',sans-serif; color:#fff; }
+  .qb { position:absolute; width:92px; height:92px; margin:-46px 0 0 -46px; border-radius:50%; background:#1b1b24; border:2px solid #fff; color:#fff; font:800 34px 'Montserrat',sans-serif; display:flex; align-items:center; justify-content:center; touch-action:manipulation; }
+  .qb i { position:absolute; inset:-34px; border-radius:50%; border:4px solid #ff6b74; pointer-events:none; transform:scale(1); }
+  .qb.ok { background:#1d6b3a; } .qb.no { background:#6b1d1d; }
+
   #d7snd { position:absolute; bottom:12px; right:12px; z-index:4; padding:6px 10px; font:700 11px 'Montserrat',sans-serif; color:#8a8a99; background:rgba(0,0,0,.5); border:1px solid #444; border-radius:8px; cursor:pointer; }
   .t6 { width:min(560px,92vw); display:flex; flex-direction:column; gap:20px; align-items:center; }
   #t6clock { position:absolute; top:84px; right:24px; font:700 13px 'Montserrat',sans-serif; color:#777; font-variant-numeric:tabular-nums; }
@@ -298,6 +305,8 @@
   <canvas id="d7cv" aria-label="Game"></canvas>
   <div id="d7hud"><span id="d7a"></span><span id="d7b"></span><span id="d7c">--:--</span></div>
   <div id="d7msg" aria-live="polite"></div>
+  <button id="d7catch" type="button" style="display:none">CATCH</button>
+  <div id="d7qte" style="display:none"><div id="d7qt"></div></div>
   <div id="d7sp" style="display:none;position:absolute;bottom:12px;left:12px;z-index:4;gap:8px;align-items:center"><button id="d7prev" class="opt" style="padding:6px 12px;font-size:12px">&lt;</button><button id="d7next" class="opt" style="padding:6px 12px;font-size:12px">&gt;</button><select id="d7room" style="background:#000;color:#fff;border:1px solid #555;border-radius:6px;padding:5px"></select></div>
   <button id="d7snd" type="button">Sound on</button>
 </section>
@@ -807,8 +816,8 @@ function lobbyD7(v) {
   v.t0 = Date.now();
   $('d7lr').textContent = v.role === 'hunter' ? 'You are a HUNTER' : v.role === 'survivor' ? 'You are a SURVIVOR' : v.role === 'spec' ? 'You will watch this round' : '';
   $('d7lr').style.color = v.role === 'hunter' ? '#ff0055' : v.role === 'survivor' ? '#00f3ff' : '#aaa';
-  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark and touch them. A hunted survivor goes back to the start, and every catch moves you somewhere else. You cannot enter the start or the exit area, or wait near them. With enough catches the exit opens for you too.'
-    : v.role === 'survivor' ? 'Find the exit before time runs out. If a hunter touches you, you do not die, but you go back to the start. Survivors still inside when the time ends are eliminated.'
+  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark. When you are close, a CATCH button appears: press it and you both freeze for 5 quick buttons. Do all 5 perfectly while the survivor fails and they go back to the start and you are moved somewhere else. You cannot enter the start or the exit area, or wait near them. With enough catches the exit opens for you too.'
+    : v.role === 'survivor' ? 'Find the exit before time runs out. When a hunter gets close and presses CATCH, you both freeze and 5 buttons appear: press them all in time (keyboard letters or taps) and you keep running. If you miss one and the hunter is perfect, you do not die, but you go back to the start. Survivors still inside when the time ends are eliminated.'
     : v.role === 'spec' ? 'There is an odd number of players, so you will not play in the maze. You can watch every room (roles only). You go on to the rope when the maze ends.' : 'Two teams will be chosen at random. Hunters against survivors. Headphones recommended.';
   const tick = () => { $('d7lc').textContent = t(); };
   tick(); const iv = setInterval(tick, 500);
@@ -839,7 +848,7 @@ function makeAudio() {
   } catch { return null; }
 }
 function say7(t, ms) { const m = $('d7msg'); m.textContent = t; m.classList.add('on'); clearTimeout(m._t); m._t = setTimeout(() => m.classList.remove('on'), ms || 2600); }
-function stopD7() { if (g7) { cancelAnimationFrame(g7.raf); clearInterval(g7.ping); clearInterval(g7.sync); window.removeEventListener('keydown', g7.kd); window.removeEventListener('keyup', g7.ku); window.removeEventListener('resize', g7.rs); g7.stopped = true; g7 = null; } if (ac7 && ac7.wind) ac7.wind.gain.value = 0; $('d7sp').style.display = 'none'; }
+function stopD7() { $('d7qte').style.display = 'none'; $('d7catch').style.display = 'none'; if (g7) { window.removeEventListener('keydown', g7.qkd, true); cancelAnimationFrame(g7.raf); clearInterval(g7.ping); clearInterval(g7.sync); window.removeEventListener('keydown', g7.kd); window.removeEventListener('keyup', g7.ku); window.removeEventListener('resize', g7.rs); g7.stopped = true; g7 = null; } if (ac7 && ac7.wind) ac7.wind.gain.value = 0; $('d7sp').style.display = 'none'; }
 
 // Shared canvas, keyboard and touch setup for the maze, the spectator view and the rope
 function setupD7(v, extra) {
@@ -884,7 +893,7 @@ function playD7(v) {   // the rope
 // ----- the live maze (hunters and survivors) -----
 function playD7m(v) {
   const n = v.maze.n, grid = Uint8Array.from(v.maze.grid, c => +c), dist = D7.dists(grid, n, v.maze.start);
-  const G = setupD7(v, { n, g: grid, dist, distE: D7.dists(grid, n, v.maze.exit), role: v.role, zone: v.maze.zone, exit: v.maze.exit, start: v.maze.start, others: new Map(), kills: 0, deaths: 0, esc: 0, total: 0, prox: 0, beat: 0, atk: new Set(), atkAt: 0, inflight: false, face: 0, lastSeen: 0 });
+  const G = setupD7(v, { n, g: grid, dist, distE: D7.dists(grid, n, v.maze.exit), role: v.role, zone: v.maze.zone, exit: v.maze.exit, start: v.maze.start, others: new Map(), kills: 0, deaths: 0, esc: 0, total: 0, prox: 0, beat: 0, inflight: false, duelId: null, lastRes: null, face: 0, lastSeen: 0 });
   G.pos = { x: (v.maze.start % n) + 0.5, y: Math.floor(v.maze.start / n) + 0.5 };
   const hunter = v.role === 'hunter';
   // Hunters cannot enter the start zone, and the exit zone only once they have enough catches
@@ -893,14 +902,18 @@ function playD7m(v) {
   say7(hunter ? 'Hunt them. ' + v.exitKills + ' catches open the exit for you.' : 'Find the exit.', 3500);
   const doSync = async () => {
     if (G.stopped || G.inflight || G.busy) return; G.inflight = true;
-    const atk = [...G.atk]; G.atk.clear();
     try {
-      const d = await call('d7sync', { x: G.pos.x, y: G.pos.y, atk }); const s = d.sync; if (G.stopped) return;
+      const d = await call('d7sync', { x: G.pos.x, y: G.pos.y }); const s = d.sync; if (G.stopped) return;
       if (!s) return route(d.view);   // the server answered with a screen instead: the maze is over for you
       if (s.ended) return goView(G);
       if (s.wait) return;
       if (s.escaped) { G.busy = true; say7('You are out.', 1800); setTimeout(() => goView(Object.assign(G, { busy: false })), 1300); return; }
       if (s.fix || s.tp || (s.me && (s.me.deaths > G.deaths || Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5))) G.pos = { x: s.me.x, y: s.me.y };   // hunted: back to the start
+      if (G.frozen && !s.duel && Date.now() - G.frozenAt > 3000 && (!s.dres || s.dres.id === G.lastRes)) { G.frozen = false; G.duelId = null; $('d7qte').style.display = 'none'; window.removeEventListener('keydown', G.qkd, true); }
+      G.near = s.near || [];
+      $('d7catch').style.display = hunter && G.near.length && !s.duel ? 'block' : 'none';
+      if (s.duel && G.duelId !== s.duel.id) { G.duelId = s.duel.id; startQte(G, s.duel); }
+      if (s.dres && s.dres.id !== G.lastRes) { G.lastRes = s.dres.id; qteOutcome(G, s.dres, hunter); }
       if (s.me) {
         if (!hunter && s.me.deaths > G.deaths) {   // hunted: nothing is lost, but you are told how much time is left
           const t = Math.max(0, Math.floor((G.v.endsAt - (Date.now() + G.offset)) / 1000)), tt = Math.floor(t / 60) + ':' + pad2(t % 60);
@@ -920,6 +933,7 @@ function playD7m(v) {
     } catch (x) { if (x && x.error && !x.kicked) say7(x.error, 1500); }
     finally { G.inflight = false; }
   };
+  $('d7catch').onclick = async () => { if (!G.near || !G.near.length) return; $('d7catch').style.display = 'none'; G.frozen = true; G.frozenAt = Date.now(); try { await call('d7duel', { target: G.near[0] }); } catch {} doSync(); };
   G.sync = setInterval(doSync, 250);
   const loop = now => {
     if (G.stopped) return;
@@ -928,7 +942,7 @@ function playD7m(v) {
     $('d7a').textContent = hunter ? 'HUNTER - ' + G.kills + ' / ' + v.exitKills + ' catches' : 'SURVIVOR';
     if (left <= -2500) return goView(G);
     const [ix, iy] = inputVec(G);
-    if (!G.busy) {
+    if (!G.busy && !G.frozen) {
       const before = { x: G.pos.x, y: G.pos.y };
       D7.move(grid, n, G.pos, ix, iy, dt);
       if (hunter && blockedAt(G.pos.x, G.pos.y)) { G.pos.x = before.x; G.pos.y = before.y; }   // hunters cannot enter the safe zones
@@ -938,7 +952,6 @@ function playD7m(v) {
     for (const c of G.others.values()) {
       c.x += (c.tx - c.x) * Math.min(1, dt * 9); c.y += (c.ty - c.y) * Math.min(1, dt * 9);
       const d = Math.hypot(c.x - G.pos.x, c.y - G.pos.y);
-      if (hunter && c.r === 's' && !c.s && d < 1.3) { const k = [...G.others].find(([, o]) => o === c)[0]; if (Date.now() - G.atkAt > 650) { G.atk.add(k); G.atkAt = Date.now(); } }
       if (!hunter && c.r === 'h') near = Math.min(near, d);
     }
     G.prox += (Math.max(0, Math.min(1, 1 - (near - 2) / 9)) - G.prox) * Math.min(1, dt * 3);
@@ -948,6 +961,47 @@ function playD7m(v) {
     G.raf = requestAnimationFrame(loop);
   };
   G.raf = requestAnimationFrame(loop);
+}
+
+// ----- the catch duel: 5 quick buttons, a circle closes around each one -----
+function startQte(G, d) {
+  G.frozen = true; G.frozenAt = Date.now(); $('d7catch').style.display = 'none';
+  const box = $('d7qte'), area = $('d7qt'), touch = matchMedia('(pointer:coarse)').matches, hits = new Array(d.prompts.length).fill(null);
+  box.style.display = 'block'; [...box.querySelectorAll('.qb')].forEach(e => e.remove());
+  const hunter = d.role === 'h', t0 = d.start - G.offset;   // local time when the first button counts
+  area.textContent = hunter ? 'Catch! Press every button in time.' : 'He caught you! Press every button in time to escape.';
+  let cur = -1, el = null, shownAt = 0, done = false;
+  const press = (i, key) => {
+    if (i !== cur || hits[i]) return; const ms = Date.now() - shownAt;
+    if (key !== d.prompts[i].k) { hits[i] = { k: key, ms: 99999 }; el.classList.add('no'); } else { hits[i] = { k: key, ms }; el.classList.add('ok'); }
+  };
+  G.qkd = e => { if (cur < 0 || touch) return; const k = e.key.toUpperCase(); if (k.length === 1 && /[A-Z]/.test(k)) { e.preventDefault(); press(cur, k); } };
+  window.addEventListener('keydown', G.qkd, true);
+  const show1 = i => {
+    const p = d.prompts[i]; cur = i; shownAt = Date.now();
+    el = document.createElement('div'); el.className = 'qb'; el.style.left = p.x + '%'; el.style.top = p.y + '%';
+    el.innerHTML = '<i></i>' + (touch ? '●' : p.k);
+    el.onpointerdown = e => { e.preventDefault(); press(i, p.k); };
+    box.appendChild(el);
+    const ring = el.firstChild; ring.animate([{ transform: 'scale(1)', opacity: 1 }, { transform: 'scale(0.62)', opacity: 1 }], { duration: d.win, easing: 'linear', fill: 'forwards' });
+    setTimeout(() => { if (el && el.parentNode) el.remove(); cur = -1; }, d.win + 120);
+  };
+  d.prompts.forEach((p, i) => setTimeout(() => { if (!G.stopped) show1(i); }, Math.max(0, t0 + p.at - Date.now())));
+  const endIn = Math.max(0, t0 + d.prompts[d.prompts.length - 1].at + d.win + 250 - Date.now());
+  setTimeout(async () => {
+    if (done || G.stopped) return; done = true; window.removeEventListener('keydown', G.qkd, true);
+    area.textContent = 'Waiting for the other player...';
+    for (let t = 0; t < 4; t++) { try { await call('d7duelres', { id: d.id, hits }); break; } catch { await new Promise(r => setTimeout(r, 600)); } }
+  }, endIn);
+}
+function qteOutcome(G, r, hunter) {
+  window.removeEventListener('keydown', G.qkd, true);
+  $('d7qte').style.display = 'none'; G.frozen = false; G.duelId = null;
+  const t = Math.max(0, Math.floor((G.v.endsAt - (Date.now() + G.offset)) / 1000)), tt = Math.floor(t / 60) + ':' + pad2(t % 60);
+  if (r.out === 'caught') say7(hunter ? 'Caught! You were moved somewhere else.' : 'You got hunted. You won\'t die. You still have ' + tt + '.', 4000);
+  else if (r.out === 'escape') say7(hunter ? 'He slipped away.' : 'Perfect! You got away.', 3000);
+  else say7('Nobody was perfect. Keep going.', 2500);
+  if (ac7) ac7.thump(0.6);
 }
 // Draws the maze around (px, py). dark = the flashlight view; spectators see a wide, softly lit area.
 function drawMaze(G, hunter, spec) {
