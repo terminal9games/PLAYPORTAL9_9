@@ -7,10 +7,10 @@
 const DEFAULTS = {
   chatMin: 10,     // minutes of briefing + chat before the lobby (the chat disappears when the lobby starts)
   lobby: 60,       // seconds of lobby before the room opens
-  wheelMin: 5,     // the wheel appears at random, between wheelMin and wheelMax minutes after the last duel
-  wheelMax: 10,
-  knifeMin: 2,     // a knife appears at random between knifeMin and knifeMax minutes
-  knifeMax: 4,
+  wheelMin: 300,   // the wheel appears at random, between wheelMin and wheelMax SECONDS after the last duel
+  wheelMax: 600,
+  knifeMin: 120,   // a knife appears at random between knifeMin and knifeMax SECONDS
+  knifeMax: 240,
   knifeSec: 5,     // seconds a player has to use the knife once they pick it up
   drawMin: 2,      // after the lights come on, the button turns green after a random delay (seconds)
   drawMax: 6,
@@ -24,8 +24,8 @@ const clamp = (v, lo, hi, d) => { v = Number(v); return Number.isFinite(v) ? Mat
 function cfg(raw) {
   const r = raw || {}, o = {};
   o.chatMin = clamp(r.chatMin, 0, 120, DEFAULTS.chatMin); o.lobby = clamp(r.lobby, 5, 900, DEFAULTS.lobby);
-  o.wheelMin = clamp(r.wheelMin, 0.1, 60, DEFAULTS.wheelMin); o.wheelMax = Math.max(o.wheelMin, clamp(r.wheelMax, 0.1, 90, DEFAULTS.wheelMax));
-  o.knifeMin = clamp(r.knifeMin, 0.1, 60, DEFAULTS.knifeMin); o.knifeMax = Math.max(o.knifeMin, clamp(r.knifeMax, 0.1, 90, DEFAULTS.knifeMax));
+  o.wheelMin = clamp(r.wheelMin, 5, 3600, DEFAULTS.wheelMin); o.wheelMax = Math.max(o.wheelMin, clamp(r.wheelMax, 5, 5400, DEFAULTS.wheelMax));
+  o.knifeMin = clamp(r.knifeMin, 5, 3600, DEFAULTS.knifeMin); o.knifeMax = Math.max(o.knifeMin, clamp(r.knifeMax, 5, 5400, DEFAULTS.knifeMax));
   o.knifeSec = clamp(r.knifeSec, 2, 20, DEFAULTS.knifeSec);
   o.drawMin = clamp(r.drawMin, 1, 15, DEFAULTS.drawMin); o.drawMax = Math.max(o.drawMin, clamp(r.drawMax, 1, 30, DEFAULTS.drawMax));
   o.shootMs = clamp(r.shootMs, 800, 8000, DEFAULTS.shootMs); o.maxMin = clamp(r.maxMin, 1, 600, DEFAULTS.maxMin);
@@ -45,14 +45,17 @@ function room(n) {
 const wire = r => ({ n: r.n, grid: Array.from(r.g).join(''), table: r.table });
 const cellXY = (n, c) => ({ x: (c % n) + 0.5, y: Math.floor(c / n) + 0.5 });
 const blocked = (r, x, y) => x < 0 || y < 0 || x >= r.n || y >= r.n || r.g[Math.floor(y) * r.n + Math.floor(x)] === 1;
-// start positions: spread around the walls so nobody starts on top of another player
+// start positions: spread evenly around the long table, like guests sitting down to eat
 function spawns(r, count) {
-  const ring = r.open.filter(c => { const p = cellXY(r.n, c); return Math.min(p.x, p.y, r.n - p.x, r.n - p.y) < 3; });
-  const out = [], pool = ring.slice().sort(() => Math.random() - 0.5);
-  for (const c of pool) { const p = cellXY(r.n, c); if (out.every(q => Math.hypot(q.x - p.x, q.y - p.y) > 2.2)) out.push(p); if (out.length >= count) break; }
-  for (const c of pool) { if (out.length >= count) break; out.push(cellXY(r.n, c)); }
+  const t = r.table, cx = (t.x0 + t.x1 + 1) / 2, cy = (t.y0 + t.y1 + 1) / 2, rx = (t.x1 - t.x0 + 1) / 2 + 1.6, ry = (t.y1 - t.y0 + 1) / 2 + 1.6;
+  const out = [], total = Math.max(count, 1), off = Math.random() * Math.PI * 2;
+  for (let i = 0; i < total; i++) {
+    const a = off + i * Math.PI * 2 / total; let x = cx + Math.cos(a) * rx * 1.05, y = cy + Math.sin(a) * ry * 1.05;
+    x = Math.min(r.n - 1.6, Math.max(1.6, x)); y = Math.min(r.n - 1.6, Math.max(1.6, y));
+    if (blocked(r, x, y)) { const c = r.open[Math.floor(Math.random() * r.open.length)]; out.push(cellXY(r.n, c)); } else out.push({ x, y });
+  }
   return out;
 }
 // The wheel and the knife are announced to everybody, so only these numbers are fixed here
-const WHEEL_SPIN = 5500, LIGHTS_FADE = 1500, RESULT_MS = 5000, SPEED = 7, STAB_RANGE = 1.9, PICK_RANGE = 1.1;
+const WHEEL_SPIN = 10000, LIGHTS_FADE = 1500, RESULT_MS = 5000, SPEED = 7, STAB_RANGE = 1.9, PICK_RANGE = 1.1;
 module.exports = { DEFAULTS, cfg, room, wire, cellXY, blocked, spawns, WHEEL_SPIN, LIGHTS_FADE, RESULT_MS, SPEED, STAB_RANGE, PICK_RANGE };
