@@ -7,7 +7,7 @@ const gauss = () => { let s = 0; for (let i = 0; i < 6; i++) s += rnd(); return 
 const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 
 // Default knobs. Days 1, 4 and 7+ depend on player skill, so the admin sets the base pass rate.
-const DEFAULTS = { p1: 0.75, p4: 0.5, p7: 0.5, cancel: 0.25, cut6: 40, cut7: 30, need7: 50, side6: 'cold', group5: 4, rounds5: 3 };
+const DEFAULTS = { p1: 0.75, p4: 0.5, p7: 0.5, cancel: 0.25, cut6: 40, cut7: 30, hi7: 75, lo7: 25, side6: 'cold', group5: 4, rounds5: 3 };
 
 function runOnce(n, days, k) {
   const bots = Array.from({ length: n }, (_, i) => ({
@@ -70,8 +70,10 @@ function runOnce(n, days, k) {
       const nOut = Math.floor(rk.length * cut / 100), boundary = nOut < rk.length ? rk[nOut].v : -Infinity;
       pass = rk.filter((r, i) => !(i < nOut && r.v > boundary)).map(r => r.b);
     } else if (day === 7) {
-      // Maze: rooms of 8, half hunters and half survivors (odd one out watches). Survivors escape by skill and luck.
-      // Hunters pass when enough of their room's survivors failed. Then the rope cuts the slowest cut7 %.
+      // Maze: rooms of 8, half hunters and half survivors (an odd player out watches and goes on).
+      // Survivors escape by skill and luck. Per room: at hi7 % escaped or more the hunters are out; at lo7 % or less
+      // they all go on; otherwise (or with fewer than 5 players) only those who found the exit pass.
+      // Then the rope cuts the slowest cut7 %.
       const o = shuffle(alive.slice()), spec = o.length % 2 ? o.pop() : null, rooms = [];
       for (let i = 0; i < o.length; i += 8) rooms.push(o.slice(i, i + 8));
       const inRope = spec ? [spec] : [];
@@ -80,10 +82,12 @@ function runOnce(n, days, k) {
         if (!rm.length) continue;
         const half = rm.length / 2, hunters = rm.slice(0, half), surv = rm.slice(half);
         const hSkill = hunters.reduce((s, b) => s + b.skill, 0) / half;
-        const esc = surv.filter(b => rnd() < clamp(0.25 + 0.5 * b.skill - 0.3 * (hSkill - 0.5), 0.05, 0.9));
+        const esc = surv.filter(b => rnd() < clamp(0.3 + 0.5 * b.skill - 0.3 * (hSkill - 0.5), 0.05, 0.9));
         inRope.push(...esc);
-        const failed = surv.length - esc.length;
-        if (failed >= Math.ceil(surv.length * k.need7 / 100)) inRope.push(...hunters.filter(() => rnd() < 0.9));   // 10% fail the kill minimum
+        const pct = 100 * esc.length / surv.length;
+        const mode = rm.length < 5 ? 'only' : pct >= k.hi7 ? 'hi' : pct <= k.lo7 ? 'lo' : 'only';
+        if (mode === 'lo') inRope.push(...hunters);
+        else if (mode === 'only') inRope.push(...hunters.filter(h => rnd() < 0.25 * (0.5 + h.skill)));   // found the exit with 3+ catches
       }
       const rk = inRope.map(b => ({ b, v: 0.6 * b.skill + 0.25 * (1 - b.sus) + 0.15 * (1 - b.greed) + 0.35 * gauss() * 0.5 })).sort((p, q) => q.v - p.v);
       const nOut = Math.floor(rk.length * clamp(k.cut7, 0, 90) / 100);
