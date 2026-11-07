@@ -305,4 +305,12 @@ async function closeNow() {
   if ((await db.ref('config/test_mode').get()).val()) { await closeDay(day, 'test'); return true; }
   return closeOnce(day);
 }
-module.exports = { closeOnce, resolveMaze7, admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
+// True while some (real) player holds the winner role: from then on nobody can log in any more
+async function winnerLocked() {
+  const u = (await db.ref('config/winner_uid').get()).val(); if (!u) return false;
+  const s = (await db.ref('players/' + u + '/status').get()).val();
+  if (s === 'winner') return true;
+  await db.ref('config/winner_uid').remove(); return false;
+}
+module.exports = {
+  winnerLocked, closeOnce, resolveMaze7, admin, db, sign, verify, maintain, closeNow, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, newId, IP_MSG };
