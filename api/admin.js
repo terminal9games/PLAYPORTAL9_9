@@ -102,7 +102,7 @@ module.exports = async (req, res) => {
     else if (action === 'setDay7') {
       // seed: a new random seed gives every room brand new mazes (use it before the maze starts, never during)
       const b = req.body, cur = D7.cfg((await db.ref('config/day7').get()).val());
-      const f = {}; ['mazeMin', 'ropeMin', 'roomSize', 'lobby', 'size', 'segs', 'cut', 'need', 'minKills', 'zone', 'lives'].forEach(k => { f[k] = b[k] === '' || b[k] == null ? cur[k] : b[k]; });
+      const f = {}; ['mazeMin', 'ropeMin', 'roomSize', 'lobby', 'size', 'segs', 'cut', 'hi', 'lo', 'minKills', 'exitKills', 'safe'].forEach(k => { f[k] = b[k] === '' || b[k] == null ? cur[k] : b[k]; });
       const next = D7.cfg({ ...f, seed: b.newSeed ? Math.random().toString(36).slice(2, 10) : cur.seed });
       await db.ref('config/day7').set(next);
       return res.json({ cfg: next });
@@ -190,7 +190,8 @@ module.exports = async (req, res) => {
       ['p1', 'p4', 'p7', 'cancel'].forEach(k => { if (P[k] !== '' && P[k] != null) o[k] = Math.min(1, Math.max(0, Number(P[k]) / 100)); });
       if (P.cut6 !== '' && P.cut6 != null) o.cut6 = Number(P.cut6);
       if (P.cut7 !== '' && P.cut7 != null) o.cut7 = Number(P.cut7);
-      if (P.need7 !== '' && P.need7 != null) o.need7 = Number(P.need7);
+      if (P.hi7 !== '' && P.hi7 != null) o.hi7 = Number(P.hi7);
+      if (P.lo7 !== '' && P.lo7 != null) o.lo7 = Number(P.lo7);
       if (P.side6 === 'warm' || P.side6 === 'cold') o.side6 = P.side6;
       return res.json(simulate(Number(b.bots), days, Number(b.runs), o));
     }
