@@ -756,7 +756,7 @@ async function reveal(v) {
       $('r1').textContent = v.role === 'hunter' ? 'The hunt is over' : 'You did not make it out';
       $('r2').textContent = '';
       await sleep(2500);
-      $('r2').textContent = v.role === 'hunter' ? (v.team ? 'You did not catch enough.' : 'The survivors got away.') : (v.lives ? 'The hunters caught you one time too many.' : 'The hunters were faster.');
+      $('r2').textContent = v.role === 'hunter' ? (v.mode === 'hi' ? 'The survivors got away.' : v.mode === 'lo' ? 'You did not catch enough.' : 'You did not find the exit.') : 'You were still in the maze when time ran out.';
     } else {
       $('r1').textContent = v.finished ? 'You made it out' : 'The hour is over';
       $('r2').textContent = '';
@@ -807,8 +807,8 @@ function lobbyD7(v) {
   v.t0 = Date.now();
   $('d7lr').textContent = v.role === 'hunter' ? 'You are a HUNTER' : v.role === 'survivor' ? 'You are a SURVIVOR' : v.role === 'spec' ? 'You will watch this round' : '';
   $('d7lr').style.color = v.role === 'hunter' ? '#ff0055' : v.role === 'survivor' ? '#00f3ff' : '#aaa';
-  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark and catch them. You cannot enter their starting area. Every catch moves you somewhere else.'
-    : v.role === 'survivor' ? 'Find the exit before the hunters find you. If you are caught you go back to the start. Be careful: the hunters are faster than they look.'
+  $('d7lx').textContent = v.role === 'hunter' ? 'Find the survivors in the dark and touch them. A hunted survivor is not sent back, but every catch moves you somewhere else. You cannot enter the start or the exit area, or wait near them. With enough catches the exit opens for you too.'
+    : v.role === 'survivor' ? 'Find the exit before time runs out. If a hunter touches you, you do not die and you are not sent back, but you lose your calm. Survivors still inside when the time ends are eliminated.'
     : v.role === 'spec' ? 'There is an odd number of players, so you will not play in the maze. You can watch every room (roles only). You go on to the rope when the maze ends.' : 'Two teams will be chosen at random. Hunters against survivors. Headphones recommended.';
   const tick = () => { $('d7lc').textContent = t(); };
   tick(); const iv = setInterval(tick, 500);
@@ -884,12 +884,13 @@ function playD7(v) {   // the rope
 // ----- the live maze (hunters and survivors) -----
 function playD7m(v) {
   const n = v.maze.n, grid = Uint8Array.from(v.maze.grid, c => +c), dist = D7.dists(grid, n, v.maze.start);
-  const G = setupD7(v, { n, g: grid, dist, role: v.role, zone: v.zone, exit: v.maze.exit, start: v.maze.start, others: new Map(), kills: 0, deaths: 0, esc: 0, total: 0, prox: 0, beat: 0, atk: new Set(), atkAt: 0, inflight: false, face: 0, lastSeen: 0 });
+  const G = setupD7(v, { n, g: grid, dist, distE: D7.dists(grid, n, v.maze.exit), role: v.role, zone: v.maze.zone, exit: v.maze.exit, start: v.maze.start, others: new Map(), kills: 0, deaths: 0, esc: 0, total: 0, prox: 0, beat: 0, atk: new Set(), atkAt: 0, inflight: false, face: 0, lastSeen: 0 });
   G.pos = { x: (v.maze.start % n) + 0.5, y: Math.floor(v.maze.start / n) + 0.5 };
   const hunter = v.role === 'hunter';
-  const inZone = (x, y) => { const c = Math.floor(y) * n + Math.floor(x); return dist[c] >= 0 && dist[c] <= v.zone; };
+  // Hunters cannot enter the start zone, and the exit zone only once they have enough catches
+  const blockedAt = (x, y) => { const c = Math.floor(y) * n + Math.floor(x); return dist[c] >= 0 && dist[c] <= G.zone ? true : (G.distE[c] >= 0 && G.distE[c] <= G.zone && G.kills < v.exitKills); };
   $('d7a').textContent = hunter ? 'HUNTER' : 'SURVIVOR';
-  say7(hunter ? 'Hunt them.' : 'Find the exit.', 3000);
+  say7(hunter ? 'Hunt them. ' + v.exitKills + ' catches open the exit for you.' : 'Find the exit.', 3500);
   const doSync = async () => {
     if (G.stopped || G.inflight || G.busy) return; G.inflight = true;
     const atk = [...G.atk]; G.atk.clear();
@@ -901,8 +902,15 @@ function playD7m(v) {
       if (s.escaped) { G.busy = true; say7('You are out.', 1800); setTimeout(() => goView(Object.assign(G, { busy: false })), 1300); return; }
       if (s.fix || s.tp || (s.me && Math.hypot(s.me.x - G.pos.x, s.me.y - G.pos.y) > 2.5)) G.pos = { x: s.me.x, y: s.me.y };
       if (s.me) {
-        if (!hunter && s.me.deaths > G.deaths) { G.fade = 1; say7('Caught.', 2200); if (ac7) ac7.thump(0.6); }
-        if (hunter && s.me.kills > G.kills) { say7('Caught one.', 1800); G.fade = 0.6; if (ac7) ac7.thump(0.5); }
+        if (!hunter && s.me.deaths > G.deaths) {   // hunted: nothing is lost, but you are told how much time is left
+          const t = Math.max(0, Math.floor((G.v.endsAt - (Date.now() + G.offset)) / 1000)), tt = Math.floor(t / 60) + ':' + pad2(t % 60);
+          const msgs = ['You got hunted. You won\'t die. You still have ' + tt + '.', 'You got hunted; you won\'t die; you still have ' + tt + ' left.', 'The hunter found you. You are not dead. You still have ' + tt + '.', 'Hunted, but alive. ' + tt + ' remain.'];
+          say7(msgs[Math.floor(Math.random() * msgs.length)], 4000); if (ac7) ac7.thump(0.6);
+        }
+        if (hunter && s.me.kills > G.kills) {
+          if (s.me.kills >= v.exitKills && G.kills < v.exitKills) say7('Enough catches. The exit is open to you.', 4000); else say7('Caught one. (' + s.me.kills + ')', 1800);
+          if (ac7) ac7.thump(0.5);
+        }
         G.deaths = s.me.deaths; G.kills = s.me.kills; G.inv = s.me.inv;
       }
       G.esc = s.esc; G.total = s.total; G.left = s.left;
@@ -917,13 +925,13 @@ function playD7m(v) {
     if (G.stopped) return;
     const dt = Math.min(0.05, (now - G.last) / 1000); G.last = now; G.t += dt;
     const left = clock7(G); $('d7b').textContent = G.esc + ' / ' + G.total + ' escaped';
-    $('d7a').textContent = hunter ? 'HUNTER - ' + G.kills + ' kills' : 'SURVIVOR - caught ' + G.deaths + 'x';
+    $('d7a').textContent = hunter ? 'HUNTER - ' + G.kills + ' / ' + v.exitKills + ' catches' : 'SURVIVOR';
     if (left <= -2500) return goView(G);
     const [ix, iy] = inputVec(G);
     if (!G.busy) {
       const before = { x: G.pos.x, y: G.pos.y };
       D7.move(grid, n, G.pos, ix, iy, dt);
-      if (hunter && inZone(G.pos.x, G.pos.y)) { G.pos.x = before.x; G.pos.y = before.y; }   // hunters cannot enter the safe zone
+      if (hunter && blockedAt(G.pos.x, G.pos.y)) { G.pos.x = before.x; G.pos.y = before.y; }   // hunters cannot enter the safe zones
       if (ix || iy) { const a = Math.atan2(iy, ix); let d = a - G.face; d = Math.atan2(Math.sin(d), Math.cos(d)); G.face += d * Math.min(1, dt * 12); }
     }
     let near = 99;
@@ -948,8 +956,8 @@ function drawMaze(G, hunter, spec) {
   cx.fillStyle = '#050508'; cx.fillRect(0, 0, W, H);
   const x0 = Math.max(0, Math.floor(-ox / S)), x1 = Math.min(n - 1, Math.ceil((W - ox) / S)), y0 = Math.max(0, Math.floor(-oy / S)), y1 = Math.min(n - 1, Math.ceil((H - oy) / S));
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
-    const i = y * n + x, d = G.dist[i];
-    cx.fillStyle = g[i] ? '#2b2b38' : (d >= 0 && d <= G.zone ? '#10241a' : '#14141b');   // the safe zone is faintly green
+    const i = y * n + x, d = G.dist[i], de = G.distE ? G.distE[i] : -1;
+    cx.fillStyle = g[i] ? '#2b2b38' : (d >= 0 && d <= G.zone ? '#10241a' : (de >= 0 && de <= G.zone ? '#10222a' : '#14141b'));   // safe zones: faintly green at the start, faintly blue at the exit
     cx.fillRect(ox + x * S, oy + y * S, S + 1, S + 1);
   }
   const ex = G.exit % n, ey = Math.floor(G.exit / n), gl = 0.55 + 0.25 * Math.sin(G.t * 1.6);
@@ -995,7 +1003,7 @@ function playD7s(v) {
       if (!s) return route(d.view);
       if (s.ended) return goView(G);
       if (s.wait) return;
-      if (s.maze) { G.n = s.maze.n; G.g = Uint8Array.from(s.maze.grid, c => +c); G.dist = D7.dists(G.g, G.n, s.maze.start); G.exit = s.maze.exit; G.zone = s.zone; want = false; }
+      if (s.maze) { G.n = s.maze.n; G.g = Uint8Array.from(s.maze.grid, c => +c); G.dist = D7.dists(G.g, G.n, s.maze.start); G.distE = D7.dists(G.g, G.n, s.maze.exit); G.exit = s.maze.exit; G.zone = s.maze.zone; want = false; }
       G.room = s.room; if (!rooms.length || rooms.length !== s.rooms.length) { rooms.length = 0; s.rooms.forEach(r => rooms.push(r)); sel.innerHTML = rooms.map(r => '<option value="' + r.id + '">' + r.label + '</option>').join(''); }
       sel.value = s.room; G.players = s.players.sort((a, b) => a.i - b.i); G.esc = s.esc; G.total = s.total;
     } catch {} finally { G.inflight = false; }
@@ -1008,7 +1016,7 @@ function playD7s(v) {
     if (left <= -2500) return goView(G);
     if (G.g) {
       const t = G.players[Math.min(G.follow, G.players.length - 1)];
-      if (t) { G.cam.x += (t.x - G.cam.x) * Math.min(1, dt * 6); G.cam.y += (t.y - G.cam.y) * Math.min(1, dt * 6); $('d7a').textContent = (t.r === 'h' ? 'HUNTER ' : 'SURVIVOR ') + (t.i + 1) + (t.r === 'h' ? ' - ' + t.k + ' kills' : ' - caught ' + t.d + 'x'); }
+      if (t) { G.cam.x += (t.x - G.cam.x) * Math.min(1, dt * 6); G.cam.y += (t.y - G.cam.y) * Math.min(1, dt * 6); $('d7a').textContent = (t.r === 'h' ? 'HUNTER ' : 'SURVIVOR ') + (t.i + 1) + (t.r === 'h' ? ' - ' + t.k + ' catches' : ' - hunted ' + t.d + 'x'); }
       drawMaze(G, false, true);
     }
     G.raf = requestAnimationFrame(loop);
