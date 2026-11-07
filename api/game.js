@@ -1,4 +1,4 @@
-const { resolveMaze7, db, sign, verify, maintain, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, IP_MSG } = require('./_lib');
+const { winnerLocked, resolveMaze7, db, sign, verify, maintain, phase5, label5, resolveGroup5, ipKey, ipTouch, rlBlocked, rlFail, secLog, IP_MSG } = require('./_lib');
 const D6 = require('./_d6');
 const D7 = require('./_d7');
 const L7 = require('./_d7live');
@@ -70,6 +70,7 @@ module.exports = async (req, res) => {
     let uid, sid, adm = false;
     const ipk = ipKey(req), t0 = Date.now();
     if (action === 'login') {
+      if (await winnerLocked()) return res.status(403).json({ error: 'It is no longer possible to log in: a winner has already been decided.', winner: true });
       if (ipk && await rlBlocked(ipk, t0)) return res.status(429).json({ error: 'Too many attempts. Wait a minute and try again.' });
       uid = String(rawUid || '').trim().toUpperCase();
       const pl0 = ID.test(uid) ? (await db.ref('players/' + uid).get()).val() : null;
@@ -430,7 +431,8 @@ module.exports = async (req, res) => {
       const players = (await db.ref('players').get()).val() || {}, tm = !!p.test;
       const byDay = {}; let total = 0;
       Object.keys(players).forEach(i => { const q = players[i]; if (!!q.test !== tm) return; total++; if (q.status === 'eliminated' && q.eliminated_day && q.eliminated_day < 8) byDay[q.eliminated_day] = (byDay[q.eliminated_day] || 0) + 1; });
-      const stats = { total, byDay, finalists: Object.keys((await db.ref('rooms8/m').get()).val() || {}).length };
+      const stt = (await db.ref('rooms8/st').get()).val() || {};
+      const stats = { total, byDay, duels: stt.duels || 0, stabs: stt.stabs || 0, secs: stt.over && run8.start ? Math.round((stt.over - run8.start) / 1000) : 0, finalists: Object.keys((await db.ref('rooms8/m').get()).val() || {}).length };
       const st = (await db.ref('rooms8/st').get()).val();
       if (st && st.over) {
         const w = st.winner ? ((await db.ref('rooms8/m/' + st.winner).get()).val() || {}).c : null;
@@ -446,7 +448,8 @@ module.exports = async (req, res) => {
     else if (p.reveal) view = { screen: 'reveal', ...p.reveal };
     else if (p.status === 'eliminated') view = { screen: 'eliminated', day: p.eliminated_day || p.current_day };
     else if (st.ended && p.status === 'active') view = { screen: 'ended', pct: st.ended.pct };
-    else if (p.status === 'winner' || p.current_day > day) view = { screen: 'passed' };
+    else if (p.status === 'winner') view = { screen: 'winner', prize: D8.cfg((await db.ref('config/day8').get()).val()).prize };
+    else if (p.current_day > day) view = { screen: 'passed' };
     else if (st.closed) view = { screen: 'none', msg: 'This day is closed.' };
     else if (day === 1.5) view = await day15view();
     else if (day === 1) view = { screen: 'day1', startAt: p.d1_start || null, now: Date.now() };
