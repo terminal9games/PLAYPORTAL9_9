@@ -188,6 +188,10 @@ async function resolveMaze7(now, force) {
 async function closeDay(day, group) {   // group: 'real' (default) or 'test'. The two groups are judged separately.
   if (day === 5) await resolveAll5(Date.now());
   if (day === 7) await resolveMaze7(Date.now(), true);
+  if (day === 8) {   // the final ends with the day: whoever is still alive in the room is decided here
+    const run8 = (await db.ref('config/day8run').get()).val(), st8 = (await db.ref('rooms8/st').get()).val();
+    if (run8 && st8 && !st8.over) await require('./_d8live').force(run8, Date.now());
+  }
   const testMode = group === 'test';   // test players and real players are never judged together
   const players = (await db.ref('players').get()).val() || {};
   const up = {};
