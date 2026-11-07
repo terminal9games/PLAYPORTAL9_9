@@ -97,9 +97,9 @@
   </div>
   <div class="card">
     <h1>Day 7 - Dark Maze (hunters vs survivors) + Tightrope</h1>
-    <p style="font-size:13px;color:#bbb;margin:0 0 10px">Press "Create rooms and open the maze" when the players are online. Each room gets the same number of hunters and survivors. Hunters try to catch survivors (a catch sends the survivor back to the start and moves the hunter to a random place, and hunters cannot enter the survivors' safe zone). Survivors who reach the exit go on to the rope. An odd player out watches the rooms and goes to the rope when the maze ends. Survivors who never escape are eliminated; hunters pass if enough survivors in their room failed and they made enough kills. The rope then ranks everyone by time.</p>
+    <p style="font-size:13px;color:#bbb;margin:0 0 10px">Press "Create rooms and open the maze" when the players are online. Each room gets the same number of hunters and survivors (an odd player watches and goes to the rope when the maze ends). A hunted survivor is not sent back: they get a 4-second message and a short shield, and the hunter is teleported elsewhere. Hunters cannot enter or camp near the start or the exit (the safe zones adapt to every maze). A hunter can use the exit only with enough catches. When time ends, survivors still inside are eliminated. If at least the "high" % of a room's survivors escaped, the hunters still inside are eliminated too; at or below the "low" %, every hunter goes on; in rooms with fewer than 5 players, 1 vs 1, or a result in between, only those who found the exit pass. The rope then ranks everyone by time.</p>
     <div class="row" style="font-size:13px"><input id="d7m" type="number" min="1" max="120" value="25" style="width:60px;margin:0"> maze min <input id="d7rm" type="number" min="3" max="120" value="25" style="width:60px;margin:0"> rope min <input id="d7rs" type="number" min="2" max="40" value="8" style="width:60px;margin:0"> room size <input id="d7lb" type="number" min="10" max="1800" value="180" style="width:70px;margin:0"> lobby s <input id="d7s" type="number" min="21" max="121" value="61" style="width:60px;margin:0"> maze size <input id="d7g" type="number" min="1" max="10" value="5" style="width:50px;margin:0"> rope segments</div>
-    <div class="row" style="font-size:13px"><input id="d7nd" type="number" min="1" max="100" value="50" style="width:60px;margin:0"> % of survivors that must fail for hunters to pass <input id="d7mk" type="number" min="0" max="20" value="1" style="width:50px;margin:0"> min kills <input id="d7z" type="number" min="3" max="30" value="12" style="width:50px;margin:0"> safe zone size <input id="d7lv" type="number" min="0" max="50" value="0" style="width:50px;margin:0"> lives (0 = unlimited) <input id="d7c" type="number" min="0" max="90" value="30" style="width:60px;margin:0"> % eliminated in the rope</div>
+    <div class="row" style="font-size:13px"><input id="d7hi" type="number" min="51" max="100" value="75" style="width:60px;margin:0"> % escaped: hunters out <input id="d7lo" type="number" min="0" max="49" value="25" style="width:60px;margin:0"> % escaped: hunters go on <input id="d7ek" type="number" min="0" max="50" value="3" style="width:50px;margin:0"> catches to use the exit <input id="d7mk" type="number" min="0" max="20" value="0" style="width:50px;margin:0"> min catches to go on <input id="d7z" type="number" min="0" max="40" value="0" style="width:50px;margin:0"> safe zone (0 = automatic) <input id="d7c" type="number" min="0" max="90" value="30" style="width:60px;margin:0"> % eliminated in the rope</div>
     <div class="row"><label style="font-size:13px"><input type="checkbox" id="d7n"> New mazes (only before opening the maze)</label><button id="d7save">Save</button><button id="d7start">Create rooms and open the maze</button><button id="d7end">End the maze now</button><button id="d7reset">Reset Day 7</button><span id="d7msg2"></span></div>
     <div id="d7info" style="font-size:13px;margin-top:8px"></div>
   </div>
@@ -224,7 +224,7 @@ $('tDel').onclick = async () => { if (!confirm('Delete ALL test players and thei
 $('sRun').onclick = async () => {
   const days = [...$('sDays').querySelectorAll('input:checked')].map(i => Number(i.value));
   $('sMsg').textContent = 'Running...';
-  const r = await adm('simulate', { bots: Number($('sBots').value), runs: Number($('sRuns').value), days, params: { p1: $('sp1').value, p4: $('sp4').value, p7: $('sp7').value, cancel: $('sc').value, cut6: $('s6').value, cut7: $('s7c').value, need7: $('d7nd').value } });
+  const r = await adm('simulate', { bots: Number($('sBots').value), runs: Number($('sRuns').value), days, params: { p1: $('sp1').value, p4: $('sp4').value, p7: $('sp7').value, cancel: $('sc').value, cut6: $('s6').value, cut7: $('s7c').value, hi7: $('d7hi').value, lo7: $('d7lo').value } });
   if (r.error) { $('sMsg').textContent = r.error; return; }
   $('sMsg').textContent = '';
   $('sOut').innerHTML = '<table><thead><tr><th>Day</th><th>Start</th><th>Pass</th><th>Eliminated</th><th>Range of passing</th></tr></thead><tbody>' +
@@ -235,7 +235,7 @@ $('sRun').onclick = async () => {
 
 $('d7save').onclick = async () => {
   if ($('d7n').checked && !confirm('New mazes for everyone. Do this only before opening the maze. Continue?')) return;
-  const r = await adm('setDay7', { mazeMin: $('d7m').value, ropeMin: $('d7rm').value, roomSize: $('d7rs').value, lobby: $('d7lb').value, size: $('d7s').value, segs: $('d7g').value, need: $('d7nd').value, minKills: $('d7mk').value, zone: $('d7z').value, lives: $('d7lv').value, cut: $('d7c').value, newSeed: $('d7n').checked });
+  const r = await adm('setDay7', { mazeMin: $('d7m').value, ropeMin: $('d7rm').value, roomSize: $('d7rs').value, lobby: $('d7lb').value, size: $('d7s').value, segs: $('d7g').value, hi: $('d7hi').value, lo: $('d7lo').value, exitKills: $('d7ek').value, minKills: $('d7mk').value, safe: $('d7z').value, cut: $('d7c').value, newSeed: $('d7n').checked });
   $('d7n').checked = false; $('d7msg2').textContent = r.error || 'Saved'; setTimeout(() => $('d7msg2').textContent = '', 3000); load();
 };
 $('d7start').onclick = async () => {
@@ -257,12 +257,12 @@ async function load() {
   if (first) { $('day').value = activeDay; $('code4').value = day4 ? day4.code : ''; $('clues').value = day4 ? (day4.clues || []).join('\n') : ''; const c6 = (day6 && day6.cfg) || {}; $('d6m').value = c6.minutes || 40; $('d6c').value = c6.cut == null ? 40 : c6.cut; $('d6s').value = c6.side || 'cold'; first = false; }
   if (day7) {
     const c7 = day7.cfg, d7 = day7.data || {}, rm = day7.rooms || {}, run = day7.run;
-    if (first) { const f = { d7m: 'mazeMin', d7rm: 'ropeMin', d7rs: 'roomSize', d7lb: 'lobby', d7s: 'size', d7g: 'segs', d7nd: 'need', d7mk: 'minKills', d7z: 'zone', d7lv: 'lives', d7c: 'cut' }; Object.keys(f).forEach(k => { $(k).value = c7[f[k]]; }); }
+    if (first) { const f = { d7m: 'mazeMin', d7rm: 'ropeMin', d7rs: 'roomSize', d7lb: 'lobby', d7s: 'size', d7g: 'segs', d7hi: 'hi', d7lo: 'lo', d7ek: 'exitKills', d7mk: 'minKills', d7z: 'safe', d7c: 'cut' }; Object.keys(f).forEach(k => { $(k).value = c7[f[k]]; }); }
     const left = run ? Math.round((run.mazeEnd - now) / 1000) : 0;
     let html = !run ? 'The maze has not been opened.' : '<b>' + (now < run.start ? 'Maze opens in ' + Math.ceil((run.start - now) / 1000) + ' s' : run.resolved ? 'Maze finished' : 'Maze live - ends in ' + Math.floor(left / 60) + 'm ' + left % 60 + 's') + '</b>';
     Object.keys(rm).forEach((rid, k) => {
       const mem = rm[rid].m || {}, P = rm[rid].p || {};
-      html += '<br>Room ' + (k + 1) + ': ' + Object.keys(mem).sort((a, b) => mem[a].i - mem[b].i).map(u => esc(u) + ' (' + esc(mem[u].role) + (mem[u].role === 'hunter' ? ', ' + esc((P[u] || {}).kills || 0) + ' kills' : ', caught ' + esc((P[u] || {}).deaths || 0) + 'x' + ((P[u] || {}).gone ? ', ESCAPED' : '')) + ')').join(', ');
+      html += '<br>Room ' + (k + 1) + ': ' + Object.keys(mem).sort((a, b) => mem[a].i - mem[b].i).map(u => esc(u) + ' (' + esc(mem[u].role) + (mem[u].role === 'hunter' ? ', ' + esc((P[u] || {}).kills || 0) + ' kills' : ', hunted ' + esc((P[u] || {}).deaths || 0) + 'x' + ((P[u] || {}).gone ? ', ESCAPED' : '')) + ')').join(', ');
     });
     const spec = Object.keys(d7).filter(u => d7[u].role === 'spec'); if (spec.length) html += '<br>Spectator: ' + spec.map(esc).join(', ');
     const ropers = Object.keys(d7).filter(u => d7[u].rstart);
