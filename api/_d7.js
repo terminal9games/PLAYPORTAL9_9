@@ -12,16 +12,17 @@ const DEFAULTS = {
   size: 61,          // maze size in grid cells (odd)
   segs: 5,           // rope segments
   cut: 30,           // % of the rope ranking that is eliminated
-  need: 50,          // % of its room's survivors that must fail to escape for the hunters to pass
-  minKills: 1,       // a hunter with fewer kills is eliminated
-  zone: 12,          // spawn safe zone: cells within this many steps of the survivors' start. Hunters cannot enter.
-  lives: 0,          // deaths before a survivor is eliminated. 0 = unlimited (they just go back to the start)
+  hi: 75,            // % of a room's survivors that escaped: at or above this, the hunters are eliminated too
+  lo: 25,            // at or below this, only the survivors still in the maze are eliminated and every hunter goes on
+  minKills: 0,       // hunters go on at the "lo" outcome only with at least this many catches
+  exitKills: 3,      // a hunter can use the exit (and pass) only with at least this many catches
+  safe: 0,           // safe zone around the start AND the exit, in steps. 0 = automatic: it adapts to every maze.
   seed: 'terminal9',
 };
 // ======================================================================================
 const MAX_CELLS_PER_S = 7;          // players walk at 4 cells/s; this is the generous bound the server accepts
 const MAX_ROPE_UNITS_PER_S = 90;    // the rope game moves at most 60 units/s
-const HIT = 2.4, SPAWN_SHIELD = 3500, ATK_COOLDOWN = 600, SEE = 11;   // cells / ms / cells
+const HIT = 2.4, SPAWN_SHIELD = 4000, ATK_COOLDOWN = 600, SEE = 11;   // cells / ms / cells
 
 const num = (x, d, lo, hi) => { const v = Math.floor(Number(x)); return Math.min(hi, Math.max(lo, Number.isFinite(v) && x !== '' && x != null ? v : d)); };
 function cfg(raw) {
@@ -29,8 +30,8 @@ function cfg(raw) {
   return {
     mazeMin: num(r.mazeMin, D.mazeMin, 1, 120), ropeMin: num(r.ropeMin, D.ropeMin, 3, 120), roomSize: num(r.roomSize, D.roomSize, 2, 40) & ~1 || 2,
     lobby: num(r.lobby, D.lobby, 10, 1800), size: num(r.size, D.size, 21, 121) | 1, segs: num(r.segs, D.segs, 1, 10),
-    cut: num(r.cut, D.cut, 0, 90), need: num(r.need, D.need, 1, 100), minKills: num(r.minKills, D.minKills, 0, 20),
-    zone: num(r.zone, D.zone, 3, 30), lives: num(r.lives, D.lives, 0, 50), seed: String(r.seed || D.seed),
+    cut: num(r.cut, D.cut, 0, 90), hi: num(r.hi, D.hi, 51, 100), lo: num(r.lo, D.lo, 0, 49), minKills: num(r.minKills, D.minKills, 0, 20),
+    exitKills: num(r.exitKills, D.exitKills, 0, 50), safe: num(r.safe, D.safe, 0, 40), seed: String(r.seed || D.seed),
   };
 }
 
@@ -71,17 +72,40 @@ function maze(seed, key, size) {
   }
   const start = n + 1, dist = bfs(grid, n, start);
   let exit = start; for (let i = 0; i < n * n; i++) if (dist[i] > dist[exit]) exit = i;
-  const m = { n, grid, start, exit, dist, pathLen: dist[exit] };
+  const m = { n, grid, start, exit, dist, distE: bfs(grid, n, exit), pathLen: dist[exit] };
   cache.set(k, m); if (cache.size > 80) cache.delete(cache.keys().next().value);
   return m;
 }
 const roomMaze = (c, seedKey) => maze(c.seed, 'room' + seedKey, c.size);
 const center = i => i; // (kept for readability)
 const cellXY = (n, i) => ({ x: (i % n) + 0.5, y: Math.floor(i / n) + 0.5 });
-const inZone = (m, c, cell) => m.dist[cell] >= 0 && m.dist[cell] <= c.zone;
-// Cells where a hunter may spawn or be teleported: open, outside the safe zone and not close to it
-const tpCells = (m, c) => { const out = []; for (let i = 0; i < m.n * m.n; i++) if (!m.grid[i] && m.dist[i] > c.zone + 6) out.push(i); return out; };
-const wire = m => ({ n: m.n, grid: Array.from(m.grid).join(''), start: m.start, exit: m.exit });
+// Safe zone radius (in steps) around the start and around the exit. 0 in the settings = automatic: the largest radius
+// that keeps each zone under 8% of the maze, so it adapts to every size and every newly generated maze.
+function zoneR(m, c) {
+  if (c.safe > 0) return c.safe;
+  if (m.autoZone) return m.autoZone;
+  let open = 0; for (let i = 0; i < m.n * m.n; i++) if (!m.grid[i]) open++;
+  const count = (d, r) => { let k = 0; for (let i = 0; i < d.length; i++) if (d[i] >= 0 && d[i] <= r) k++; return k; };
+  let r = 5; for (let t = 6; t <= 30; t++) { if (count(m.dist, t) <= open * 0.08 && count(m.distE, t) <= open * 0.08) r = t; else break; }
+  return (m.autoZone = Math.max(5, Math.min(r, Math.round(m.pathLen * 0.06))));   // and never more than ~6% of the way to the exit
+}
+// 'S' = inside the start zone, 'E' = inside the exit zone, null = outside both
+const zoneOf = (m, c, cell) => { const r = zoneR(m, c); return m.dist[cell] >= 0 && m.dist[cell] <= r ? 'S' : (m.distE[cell] >= 0 && m.distE[cell] <= r ? 'E' : null); };
+// The ring just outside a zone, where hunters may not hang around either
+const nearZone = (m, c, cell) => { const r = zoneR(m, c) + 6; return (m.dist[cell] >= 0 && m.dist[cell] <= r) || (m.distE[cell] >= 0 && m.distE[cell] <= r); };
+// Cells where a hunter may spawn or be teleported: open, outside both zones and their rings
+const tpCells = (m, c) => { const out = []; for (let i = 0; i < m.n * m.n; i++) if (!m.grid[i] && !nearZone(m, c, i)) out.push(i); return out; };
+const wire = (m, c) => ({ n: m.n, grid: Array.from(m.grid).join(''), start: m.start, exit: m.exit, zone: zoneR(m, c) });
+
+// What happens at the end of the maze in one room. Survivors still inside are always out. For hunters:
+//  'hi'  : at least `hi`% of the survivors escaped -> hunters still inside are eliminated too
+//  'lo'  : at most `lo`% escaped -> hunters still inside go on (with at least minKills catches)
+//  'only': fewer than 5 players, or a result between the two limits -> only those who found the exit pass
+function mazeMode(roomPlayers, survivors, escaped, c) {
+  if (roomPlayers < 5 || survivors < 1) return 'only';
+  const pct = 100 * escaped / survivors;
+  return pct >= c.hi ? 'hi' : pct <= c.lo ? 'lo' : 'only';
+}
 
 // Tightrope: segment s is longer and windier than the one before
 const rope = (c, s) => ({ seg: s, len: 2400 + 600 * s, amp: +(0.8 + 0.2 * s).toFixed(2), seed: c.seed + '~' + s, minMs: Math.ceil((2400 + 600 * s) / MAX_ROPE_UNITS_PER_S * 1000) });
@@ -102,4 +126,4 @@ const rank = (d7, ids) => {
   return fin.concat(rest);
 };
 const units = c => c.segs;
-module.exports = { DEFAULTS, cfg, maze, roomMaze, cellXY, inZone, tpCells, wire, rope, buildRooms, rank, units, bfs, rng, HIT, SPAWN_SHIELD, ATK_COOLDOWN, SEE, MAX_CELLS_PER_S };
+module.exports = { DEFAULTS, cfg, maze, roomMaze, cellXY, zoneR, zoneOf, nearZone, mazeMode, tpCells, wire, rope, buildRooms, rank, units, bfs, rng, HIT, SPAWN_SHIELD, ATK_COOLDOWN, SEE, MAX_CELLS_PER_S };
